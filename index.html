@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hidz | Host</title>
+    <link rel="icon" type="image/png" href="https://www.gobox.my.id/file/IcHjU.png">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Rubik:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --pink: #FF2D78;
+            --cyan: #00E5FF;
+            --lime: #BFFF00;
+            --yellow: #FFE600;
+            --purple: #B537F2;
+            --blue: #3D5AFE;
+            --orange: #FF6D00;
+            --bg: #FFF5F9;
+            --card-bg: #FFFFFF;
+            --text-dark: #1a1a2e;
+            --border-color: #1a1a2e;
+            --border-thick: 3px solid #1a1a2e;
+            --shadow: 5px 5px 0px #1a1a2e;
+            --shadow-lg: 8px 8px 0px #1a1a2e;
+            --radius: 16px;
+            --success: #00C853;
+            --input-bg: #FAFAFA;
+            --upload-bg: #FFF8E1;
+            --text-secondary: #555;
+            --prefix-color: #888;
+        }
+
+        html.dark {
+            --bg: #1a1a2e;
+            --card-bg: #2a2a3e;
+            --text-dark: #e8e8f0;
+            --border-color: #e8e8f0;
+            --border-thick: 3px solid #e8e8f0;
+            --shadow: 5px 5px 0px #e8e8f0;
+            --shadow-lg: 8px 8px 0px #e8e8f0;
+            --input-bg: #2a2a3e;
+            --upload-bg: #2a2a3e;
+            --text-secondary: #aaa;
+            --prefix-color: #999;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text-dark);
+            font-family: 'Inter', system-ui, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            overflow-x: hidden;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background:
+                radial-gradient(circle at 15% 25%, rgba(255, 45, 120, 0.12) 0%, transparent 45%),
+                radial-gradient(circle at 85% 75%, rgba(0, 229, 255, 0.1) 0%, transparent 45%),
+                radial-gradient(circle at 50% 50%, rgba(181, 55, 242, 0.06) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .sparkle {
+            position: fixed;
+            pointer-events: none;
+            z-index: 0;
+            font-size: 18px;
+            opacity: 0.35;
+            animation: float-sparkle 6s ease-in-out infinite;
+        }
+
+        @keyframes float-sparkle {
+            0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.35; }
+            50% { transform: translateY(-20px) rotate(180deg); opacity: 0.6; }
+        }
+
+        header {
+            border-bottom: var(--border-thick);
+            background: var(--yellow);
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            box-shadow: 0 4px 0px #1a1a2e;
+            overflow: hidden;
+        }
+
+        .navbar-container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 14px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .brand {
+            font-family: 'Rubik', sans-serif;
+            font-size: 22px;
+            font-weight: 900;
+            color: var(--text-dark);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-transform: uppercase;
+            letter-spacing: -0.5px;
+        }
+
+        .brand .accent {
+            background: var(--pink);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 6px;
+            border: 2px solid var(--text-dark);
+            box-shadow: 2px 2px 0px var(--text-dark);
+            font-size: 18px;
+        }
+
+        main {
+            max-width: 880px;
+            width: 100%;
+            margin: 40px auto;
+            padding: 0 24px;
+            flex: 1;
+            position: relative;
+            z-index: 1;
+        }
+
+        .headline-section {
+            text-align: center;
+            margin-bottom: 36px;
+        }
+
+        .headline-section h1 {
+            font-family: 'Rubik', sans-serif;
+            font-size: 42px;
+            font-weight: 900;
+            letter-spacing: -1.5px;
+            margin-bottom: 14px;
+            color: var(--text-dark);
+            text-transform: uppercase;
+            line-height: 1.1;
+        }
+
+        .headline-section h1 .highlight-pink {
+            background: var(--pink);
+            color: white;
+            padding: 2px 12px;
+            border-radius: 8px;
+            border: 3px solid var(--text-dark);
+            box-shadow: 4px 4px 0px var(--text-dark);
+            display: inline-block;
+            transform: rotate(-1deg);
+        }
+
+        .headline-section h1 .highlight-cyan {
+            background: var(--cyan);
+            color: var(--text-dark);
+            padding: 2px 12px;
+            border-radius: 8px;
+            border: 3px solid var(--text-dark);
+            box-shadow: 4px 4px 0px var(--text-dark);
+            display: inline-block;
+            transform: rotate(1deg);
+        }
+
+        .headline-section p {
+            color: var(--text-secondary);
+            font-size: 16px;
+            max-width: 560px;
+            margin: 0 auto;
+            line-height: 1.6;
+            font-weight: 500;
+        }
+
+        .badge-row {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 5px 12px;
+            border-radius: 100px;
+            border: 2px solid var(--text-dark);
+            box-shadow: 2px 2px 0px var(--text-dark);
+        }
+
+        .badge-pink { background: var(--pink); color: white; }
+        .badge-cyan { background: var(--cyan); color: var(--text-dark); }
+        .badge-lime { background: var(--lime); color: var(--text-dark); }
+
+        .card {
+            background-color: var(--card-bg);
+            border: var(--border-thick);
+            border-radius: var(--radius);
+            padding: 36px;
+            box-shadow: var(--shadow-lg);
+            position: relative;
+        }
+
+        .card::before {
+            content: '✦';
+            position: absolute;
+            top: -14px;
+            right: 20px;
+            font-size: 26px;
+            color: var(--purple);
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-family: 'Rubik', sans-serif;
+        }
+
+        .input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        input[type="text"], input[type="password"], select {
+            width: 100%;
+            background-color: var(--input-bg);
+            border: var(--border-thick);
+            border-radius: 12px;
+            padding: 14px 16px;
+            color: var(--text-dark);
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.3s;
+            box-shadow: 3px 3px 0px var(--text-dark);
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--pink);
+            box-shadow: 3px 3px 0px var(--pink);
+            background: white;
+        }
+
+        .tab-menu {
+            display: flex;
+            gap: 10px;
+            border-bottom: var(--border-thick);
+            padding-bottom: 16px;
+            margin-bottom: 24px;
+        }
+
+        .tab-btn {
+            background: white;
+            border: var(--border-thick);
+            color: var(--text-dark);
+            padding: 10px 20px;
+            font-size: 13px;
+            font-weight: 700;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.15s;
+            box-shadow: 3px 3px 0px var(--text-dark);
+            font-family: 'Rubik', sans-serif;
+        }
+
+        .tab-btn:hover {
+            transform: translate(-1px, -1px);
+            box-shadow: 4px 4px 0px var(--text-dark);
+        }
+
+        .tab-btn:active {
+            transform: translate(2px, 2px);
+            box-shadow: 1px 1px 0px var(--text-dark);
+        }
+
+        .tab-btn.active {
+            background: var(--cyan);
+            color: var(--text-dark);
+            box-shadow: 3px 3px 0px var(--text-dark);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .upload-area {
+            border: 3px dashed var(--text-dark);
+            border-radius: 14px;
+            padding: 36px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: var(--upload-bg);
+        }
+
+        .upload-area:hover {
+            background: var(--yellow);
+            transform: translate(-2px, -2px);
+            box-shadow: 4px 4px 0px var(--text-dark);
+        }
+
+        .upload-area .upload-icon {
+            font-size: 40px;
+            margin-bottom: 12px;
+        }
+
+        .upload-area p {
+            font-size: 14px;
+            color: var(--text-dark);
+            font-weight: 500;
+        }
+
+        .upload-area p strong {
+            color: var(--pink);
+            font-weight: 800;
+        }
+
+        .file-selected-status {
+            margin-top: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--success);
+            font-weight: 600;
+            display: none;
+            background: #E8F5E9;
+            padding: 8px 14px;
+            border-radius: 8px;
+            border: 2px solid var(--success);
+        }
+
+        textarea {
+            width: 100%;
+            background-color: var(--input-bg);
+            border: var(--border-thick);
+            border-radius: 12px;
+            padding: 14px;
+            color: var(--text-dark);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            resize: vertical;
+            min-height: 200px;
+            box-shadow: 3px 3px 0px var(--text-dark);
+        }
+
+        .submit-btn {
+            width: 100%;
+            background: var(--pink);
+            border: var(--border-thick);
+            border-radius: 14px;
+            color: white;
+            padding: 16px;
+            font-size: 16px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all 0.15s;
+            box-shadow: var(--shadow);
+            margin-top: 12px;
+            font-family: 'Rubik', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .submit-btn:hover {
+            transform: translate(-2px, -2px);
+            box-shadow: 7px 7px 0px var(--text-dark);
+            background: #E91E6B;
+        }
+
+        .submit-btn:active {
+            transform: translate(3px, 3px);
+            box-shadow: 2px 2px 0px var(--text-dark);
+        }
+
+        .submit-btn:disabled {
+            background: #ccc;
+            color: #888;
+            cursor: not-allowed;
+            box-shadow: 3px 3px 0px #999;
+            transform: none;
+        }
+
+        .result-panel {
+            display: none;
+            background: #E8F5E9;
+            border: var(--border-thick);
+            border-radius: var(--radius);
+            padding: 28px;
+            margin-top: 24px;
+            box-shadow: var(--shadow);
+            animation: pop-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes pop-in {
+            from { transform: scale(0.9) translateY(20px); opacity: 0; }
+            to { transform: scale(1) translateY(0); opacity: 1; }
+        }
+
+        .result-title {
+            color: var(--success);
+            font-family: 'Rubik', sans-serif;
+            font-size: 20px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+        }
+
+        .result-panel p {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+            line-height: 1.6;
+        }
+
+        .deploy-url {
+            background: white;
+            border: var(--border-thick);
+            border-radius: 10px;
+            padding: 14px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            color: var(--blue);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            box-shadow: 3px 3px 0px var(--text-dark);
+        }
+
+        .deploy-url a {
+            color: var(--blue);
+            text-decoration: none;
+            font-weight: 700;
+        }
+
+        .deploy-url a:hover {
+            text-decoration: underline;
+        }
+
+        .copy-link {
+            font-size: 11px;
+            color: #888;
+            padding-left: 10px;
+            cursor: pointer;
+            font-weight: 700;
+            background: var(--yellow);
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 2px solid var(--text-dark);
+            text-decoration: none;
+            transition: all 0.15s;
+        }
+
+        .copy-link:hover {
+            background: var(--lime);
+            transform: translate(-1px, -1px);
+            box-shadow: 2px 2px 0px var(--text-dark);
+        }
+
+        .action-links {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .action-link-btn {
+            text-align: center;
+            padding: 14px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 800;
+            text-decoration: none;
+            transition: all 0.15s;
+            border: var(--border-thick);
+            font-family: 'Rubik', sans-serif;
+            text-transform: uppercase;
+        }
+
+        .link-visit {
+            background: var(--blue);
+            color: white;
+            box-shadow: 3px 3px 0px var(--text-dark);
+        }
+
+        .link-visit:hover {
+            transform: translate(-2px, -2px);
+            box-shadow: 5px 5px 0px var(--text-dark);
+        }
+
+        .link-manage {
+            background: var(--lime);
+            color: var(--text-dark);
+            box-shadow: 3px 3px 0px var(--text-dark);
+        }
+
+        .link-manage:hover {
+            transform: translate(-2px, -2px);
+            box-shadow: 5px 5px 0px var(--text-dark);
+        }
+
+        footer {
+            border-top: var(--border-thick);
+            background: var(--purple);
+            color: white;
+            padding: 20px 24px;
+            text-align: center;
+            font-size: 13px;
+            font-weight: 600;
+            box-shadow: 0 -4px 0px var(--text-dark);
+        }
+
+        footer .credits {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            margin-top: 4px;
+            opacity: 0.7;
+        }
+
+        .error-msg {
+            background: #FFF3F0;
+            border: 3px solid #E53935;
+            color: #C62828;
+            padding: 14px 18px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            margin-top: 16px;
+            display: none;
+            box-shadow: 3px 3px 0px #C62828;
+        }
+
+        .dark-toggle {
+            background: white;
+            border: var(--border-thick);
+            border-radius: 50%;
+            width: 38px;
+            height: 38px;
+            padding: 0;
+            cursor: pointer;
+            font-size: 16px;
+            box-shadow: 3px 3px 0px var(--text-dark);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-dark);
+            flex-shrink: 0;
+        }
+
+        html.dark .dark-toggle {
+            background: #2a2a3e;
+            color: #e8e8f0;
+        }
+
+        .dark-toggle:hover {
+            transform: translate(-1px, -1px);
+            box-shadow: 4px 4px 0px var(--text-dark);
+        }
+
+        .dark-toggle:active {
+            transform: translate(2px, 2px);
+            box-shadow: 1px 1px 0px var(--text-dark);
+        }
+
+        html.dark header {
+            background: #2a2a3e;
+        }
+
+        html.dark footer {
+            background: #2a2a3e;
+        }
+
+        html.dark .card {
+            transition: background 0.3s, border-color 0.3s;
+        }
+
+        html.dark .result-panel {
+            background: #1a3a1a;
+        }
+
+        html.dark .error-msg {
+            background: #3a1a1a;
+        }
+
+        @media (max-width: 600px) {
+            .headline-section h1 { font-size: 28px; }
+            .card { padding: 24px 18px; }
+            .tab-menu { flex-direction: column; gap: 8px; }
+            .action-links { grid-template-columns: 1fr; }
+            .badge-row { flex-direction: column; align-items: center; }
+        }
+    </style>
+</head>
+<body>
+    <div class="sparkle" style="top: 12%; left: 8%;">✦</div>
+    <div class="sparkle" style="top: 30%; right: 5%; animation-delay: 1s;">✧</div>
+    <div class="sparkle" style="top: 65%; left: 4%; animation-delay: 2s;">⟡</div>
+    <div class="sparkle" style="top: 80%; right: 10%; animation-delay: 0.5s;">✦</div>
+    <div class="sparkle" style="top: 45%; right: 15%; animation-delay: 3s;">✧</div>
+
+    <header>
+        <div class="navbar-container">
+            <a href="#" class="brand">
+                <img src="https://www.gobox.my.id/file/IcHjU.png" alt="HidzHost" style="width: 28px; height: 28px; vertical-align: middle; border-radius: 50%; border: 2px solid var(--text-dark); box-shadow: 2px 2px 0px var(--text-dark);"> <span class="accent">HIDZ HOST</span>
+            </a>
+            <button class="dark-toggle" id="darkToggle" onclick="toggleDarkMode()">
+                <span id="darkIcon">🌙</span>
+            </button>
+        </div>
+    </header>
+
+    <main>
+        <section class="headline-section">
+            <h1>
+                <span class="highlight-pink">Hosting</span> &
+                <span class="highlight-cyan">Deploy</span><br>
+                Website Instan
+            </h1>
+            <p>Wujudkan website impianmu dalam hitungan detik! Cukup pilih nama unik, atur kata sandi, dan langsung tayangkan ke internet.</p>
+            <div class="badge-row">
+                <span class="badge badge-pink">⚡ Super Cepat</span>
+                <span class="badge badge-cyan">🔒 Aman & Terlindungi</span>
+                <span class="badge badge-lime">🌐 Langsung Online</span>
+            </div>
+        </section>
+
+        <section class="card">
+            <form id="hostingForm">
+                <div class="form-group">
+                    <label for="siteId">✦ Nama Unik Website (Subfolder)</label>
+                    <div class="input-wrapper">
+                        <input
+                            type="text"
+                            id="siteId"
+                            name="siteId"
+                            placeholder="contoh: nama-web"
+                            required
+                            autocomplete="off"
+                        >
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="password">✦ Kata Sandi Keamanan</label>
+                    <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        placeholder="Masukan Sandi Pelindung Anda"
+                        required
+                    >
+                </div>
+
+                <div class="tab-menu">
+                    <button type="button" class="tab-btn active" onclick="switchTab('zip')">📦 Unggah Berkas ZIP</button>
+                    <button type="button" class="tab-btn" onclick="switchTab('paste')">✍️ Tempel Kode HTML</button>
+                </div>
+
+                <div id="tab-zip" class="tab-content active">
+                    <div class="form-group">
+                        <div class="upload-area" onclick="document.getElementById('zipfile').click()">
+                            <div class="upload-icon">📁</div>
+                            <p>Seret & lepas berkas <strong>.ZIP</strong> di sini,<br>atau klik untuk memilih dari perangkat Anda</p>
+                            <p style="font-size: 12px; margin-top: 6px; opacity: 0.75;">✅ Mendukung semua jenis berkas — HTML, CSS, JS, gambar, PDF, video, dan lainnya</p>
+                        </div>
+                        <input type="file" id="zipfile" name="zipfile" accept=".zip" style="display: none;" onchange="handleFileSelected(event)">
+                        <div id="fileSelectedTxt" class="file-selected-status"></div>
+                    </div>
+                </div>
+
+                <div id="tab-paste" class="tab-content">
+                    <div class="form-group">
+                        <label for="htmlCode">✦ Tempelkan Kode HTML Anda</label>
+                        <textarea
+                            id="htmlCode"
+                            name="htmlCode"
+                            placeholder="<!DOCTYPE html>&#10;<html>&#10;<head>&#10;    <title>Hidz | Host</title>&#10;</head>&#10;<body>&#10;    <h1>Hello Word!</h1>&#10;</body>&#10;</html>"
+                        ></textarea>
+                    </div>
+                </div>
+
+                <button type="submit" id="submitBtn" class="submit-btn">🚀 Tayangkan Website Sekarang!</button>
+            </form>
+
+            <div id="errorBox" class="error-msg"></div>
+
+            <div id="resultPanel" class="result-panel">
+                <div class="result-title">
+                    <span>🎉</span>
+                    <span>Website Berhasil Ditayangkan!</span>
+                </div>
+                <p>Selamat! Website Anda telah berhasil disiapkan dan kini dapat diakses oleh siapa saja di seluruh dunia melalui tautan berikut.</p>
+
+                <div class="deploy-url">
+                    <span id="createdSiteUrl">example.com/namanya/</span>
+                    <a href="#" id="copiedLinkBtn" class="copy-link" onclick="copyResultUrl(event)">📋 Salin</a>
+                </div>
+
+                <div class="action-links">
+                    <a href="#" id="visitSiteBtn" target="_blank" class="action-link-btn link-visit">🌐 Kunjungi Website</a>
+                    <a href="#" id="manageSiteBtn" target="_blank" class="action-link-btn link-manage">📂 Kelola Berkas</a>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2026 HidzHost — Solusi Hosting Instan Terpercaya</p>
+        <div class="credits"></div>
+    </footer>
+
+    <script>
+        const currentOrigin = window.location.origin;
+        const currentPath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
+        const fullBasePath = currentOrigin + currentPath;
+
+        let currentActiveTab = 'zip';
+
+        function switchTab(tab) {
+            currentActiveTab = tab;
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+            if (tab === 'zip') {
+                document.querySelector('.tab-btn:nth-child(1)').classList.add('active');
+                document.getElementById('tab-zip').classList.add('active');
+            } else {
+                document.querySelector('.tab-btn:nth-child(2)').classList.add('active');
+                document.getElementById('tab-paste').classList.add('active');
+            }
+        }
+
+        function handleFileSelected(e) {
+            const file = e.target.files[0];
+            const div = document.getElementById('fileSelectedTxt');
+            if (file) {
+                const sizeStr = file.size >= 1024 * 1024
+                    ? (file.size / (1024 * 1024)).toFixed(2) + ' MB'
+                    : (file.size / 1024).toFixed(1) + ' KB';
+                div.innerText = '✓ Berkas terpilih: ' + file.name + ' (' + sizeStr + ')';
+                div.style.display = 'block';
+            } else {
+                div.style.display = 'none';
+            }
+        }
+
+        document.getElementById('hostingForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const errBox = document.getElementById('errorBox');
+            const resultPanel = document.getElementById('resultPanel');
+            const submitBtn = document.getElementById('submitBtn');
+
+            errBox.style.display = 'none';
+            resultPanel.style.display = 'none';
+            submitBtn.disabled = true;
+            submitBtn.innerText = '⏳ Memproses permintaan Anda...';
+
+            const siteIdValue = document.getElementById('siteId').value.trim().toLowerCase().replace(/[^a-zA-Z0-9\-_]/g, '');
+            const passwordValue = document.getElementById('password').value;
+
+            if (!siteIdValue) {
+                showError('Nama subfolder tidak boleh kosong. Gunakan huruf, angka, atau tanda hubung saja.');
+                resetButton();
+                return;
+            }
+
+            try {
+                if (currentActiveTab === 'zip') {
+                    const fileInput = document.getElementById('zipfile');
+                    if (fileInput.files.length === 0) {
+                        showError('Silakan pilih berkas ZIP website Anda terlebih dahulu.');
+                        resetButton();
+                        return;
+                    }
+
+                    const formData = new FormData();
+                    formData.append('siteId', siteIdValue);
+                    formData.append('password', passwordValue);
+                    formData.append('zipfile', fileInput.files[0]);
+
+                    const res = await fetch('api.php?action=zip_deploy', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const data = await res.json();
+                    if (data.error) {
+                        showError(data.error);
+                    } else {
+                        showSuccess(siteIdValue);
+                    }
+                } else {
+                    const htmlContent = document.getElementById('htmlCode').value;
+                    if (!htmlContent.trim()) {
+                        showError('Silakan masukkan kode HTML utama Anda terlebih dahulu.');
+                        resetButton();
+                        return;
+                    }
+
+                    const payload = {
+                        siteId: siteIdValue,
+                        password: passwordValue,
+                        files: [
+                            {
+                                path: 'index.html',
+                                content: htmlContent,
+                                encoding: 'text'
+                            }
+                        ]
+                    };
+
+                    const res = await fetch('api.php?action=deploy', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const data = await res.json();
+                    if (data.error) {
+                        showError(data.error);
+                    } else {
+                        showSuccess(siteIdValue);
+                    }
+                }
+            } catch (err) {
+                showError('Tidak dapat terhubung ke server. Pastikan berkas api.php berada di direktori yang sama.');
+            } finally {
+                resetButton();
+            }
+        });
+
+        function resetButton() {
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = false;
+            submitBtn.innerText = '🚀 Tayangkan Website Sekarang!';
+        }
+
+        function showError(msg) {
+            const errBox = document.getElementById('errorBox');
+            errBox.innerText = '⚠️ ' + msg;
+            errBox.style.display = 'block';
+        }
+
+        function showSuccess(siteId) {
+            const resultPanel = document.getElementById('resultPanel');
+            const createdSiteUrl = document.getElementById('createdSiteUrl');
+            const visitSiteBtn = document.getElementById('visitSiteBtn');
+            const manageSiteBtn = document.getElementById('manageSiteBtn');
+
+            const fullSiteUrl = fullBasePath + '/' + siteId + '/';
+            const fullManagerUrl = fullBasePath + '/file_manager.php?siteId=' + siteId;
+
+            createdSiteUrl.innerHTML = `<a href="${fullSiteUrl}" target="_blank">${fullBasePath}/${siteId}/</a>`;
+            visitSiteBtn.href = fullSiteUrl;
+            manageSiteBtn.href = fullManagerUrl;
+
+            resultPanel.style.display = 'block';
+            resultPanel.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function copyResultUrl(e) {
+            e.preventDefault();
+            const link = document.getElementById('visitSiteBtn').href;
+            navigator.clipboard.writeText(link);
+            const btn = e.target;
+            btn.innerText = '✓ Tersalin!';
+            setTimeout(() => { btn.innerText = '📋 Salin'; }, 2000);
+        }
+
+        function toggleDarkMode() {
+            const html = document.documentElement;
+            const icon = document.getElementById('darkIcon');
+            html.classList.toggle('dark');
+            const isDark = html.classList.contains('dark');
+            icon.textContent = isDark ? '☀️' : '🌙';
+            localStorage.setItem('hidzhost-dark', isDark ? '1' : '0');
+        }
+
+        (function initDarkMode() {
+            const saved = localStorage.getItem('hidzhost-dark');
+            if (saved === '1') {
+                document.documentElement.classList.add('dark');
+                document.getElementById('darkIcon').textContent = '☀️';
+            }
+        })();
+    </script>
+</body>
+</html>
