@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pengelola Berkas — HidzHost</title>
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Ace Editor Library via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.15.0/ace.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <style>
+        :root {
+            --pink: #FF2D78;
+            --cyan: #00E5FF;
+            --lime: #BFFF00;
+            --yellow: #FFE600;
+            --purple: #B537F2;
+            --blue: #3D5AFE;
+            --bg: #FFF5F9;
+            --sidebar-bg: #FFFFFF;
+            --editor-header: #FFF8E1;
+            --border-thick: 3px solid #1a1a2e;
+            --border-thin: 2px solid #1a1a2e;
+            --text-dark: #1a1a2e;
+            --text-muted: #777;
+            --shadow: 5px 5px 0px #1a1a2e;
+            --shadow-sm: 3px 3px 0px #1a1a2e;
+            --success: #00C853;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html {
+            overflow-x: hidden;
+            max-width: 100vw;
+        }
+        body {
+            background: var(--bg);
+            color: var(--text-dark);
+            font-family: 'Inter', sans-serif;
+            height: 100vh;
+            max-width: 100vw;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Top Header Navigation */
+        header {
+            background: var(--yellow);
+            border-bottom: var(--border-thick);
+            padding: 12px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 0px #1a1a2e;
+            overflow: hidden;
+            width: 100%;
+            min-width: 0;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .header-left h2 {
+            font-family: 'Rubik', sans-serif;
+            font-size: 15px;
+            font-weight: 900;
+            text-transform: uppercase;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .header-left .site-badge {
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--cyan);
+            border: var(--border-thin);
+            color: var(--text-dark);
+            padding: 3px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            box-shadow: 2px 2px 0px var(--text-dark);
+            max-width: 160px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .header-right {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            border: var(--border-thin);
+            transition: all 0.15s;
+            font-family: 'Rubik', sans-serif;
+            text-transform: uppercase;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .btn-logout {
+            background: white;
+            color: #E53935;
+            box-shadow: 2px 2px 0px var(--text-dark);
+        }
+
+        .btn-logout:hover {
+            background: #FFF3F0;
+            transform: translate(-1px, -1px);
+            box-shadow: 3px 3px 0px var(--text-dark);
+        }
+
+        .btn-view {
+            background: var(--blue);
+            color: white;
+            box-shadow: 2px 2px 0px var(--text-dark);
+        }
+
+        .btn-view:hover {
+            transform: translate(-1px, -1px);
+            box-shadow: 3px 3px 0px var(--text-dark);
+        }
+
+        /* Outer Container */
+        .workspace {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Sidebar File Tree */
+        .sidebar {
+            width: 290px;
+            background: var(--sidebar-bg);
+            border-right: var(--border-thick);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .sidebar-header {
+            padding: 16px;
+            border-bottom: var(--border-thick);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #F0FFF0;
+        }
+
+        .sidebar-header h3 {
+            font-family: 'Rubik', sans-serif;
+            font-size: 12px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-dark);
+        }
+
+        .btn-icon {
+            background: var(--lime);
+            border: var(--border-thin);
+            color: var(--text-dark);
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 6px;
+            box-shadow: 2px 2px 0px var(--text-dark);
+            transition: all 0.15s;
+        }
+
+        .btn-icon:hover {
+            transform: translate(-1px, -1px);
+            box-shadow: 3px 3px 0px var(--text-dark);
+        }
+
+        .tree-root {
+            padding: 12px 16px;
+            list-style: none;
+        }
+
+        .tree-node {
+            margin-bottom: 4px;
+        }
+
+        .tree-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 10px;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.15s;
+            border: 2px solid transparent;
+            font-weight: 500;
+        }
+
+        .tree-label:hover {
+            background: #FFF8E1;
+            border-color: var(--yellow);
+        }
+
+        .tree-label.active {
+            background: var(--cyan);
+            border: var(--border-thin);
+            color: var(--text-dark);
+            font-weight: 700;
+            box-shadow: 2px 2px 0px var(--text-dark);
+        }
+
+        .node-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .node-size {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .node-delete-btn {
+            opacity: 0;
+            color: #E53935;
+            transition: opacity 0.15s;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 900;
+        }
+
+        .tree-label:hover .node-delete-btn {
+            opacity: 1;
+        }
+
+        /* Editor Panel */
+        .editor-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #FAFAFA;
+        }
+
+        .editor-top-bar {
+            background: var(--editor-header);
+            border-bottom: var(--border-thick);
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .current-filename {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-dark);
+            background: white;
+            padding: 4px 12px;
+            border-radius: 6px;
+            border: var(--border-thin);
+            box-shadow: 2px 2px 0px var(--text-dark);
+        }
+
+        .save-btn {
+            background: var(--success);
+            color: white;
+            padding: 8px 18px;
+            border-radius: 8px;
+            border: var(--border-thin);
+            font-size: 13px;
+            font-weight: 800;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s;
+            box-shadow: 2px 2px 0px var(--text-dark);
+            font-family: 'Rubik', sans-serif;
+            text-transform: uppercase;
+        }
+
+        .save-btn:hover {
+            transform: translate(-1px, -1px);
+            box-shadow: 3px 3px 0px var(--text-dark);
+        }
+
+        #codeEditorSection {
+            flex: 1;
+            width: 100%;
+            height: 100%;
+        }
+
+        .placeholder-screen {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            text-align: center;
+            background: var(--bg);
+        }
+
+        .placeholder-icon {
+            font-size: 56px;
+            margin-bottom: 16px;
+        }
+
+        .placeholder-screen h2 {
+            font-family: 'Rubik', sans-serif;
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--text-dark);
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .placeholder-screen p {
+            font-size: 14px;
+            color: #888;
+            max-width: 320px;
+            line-height: 1.5;
+        }
+
+        /* Binary / Image Preview Panel */
+        .binary-preview-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 32px 24px;
+            overflow: auto;
+            background: var(--bg);
+            text-align: center;
+        }
+
+        .binary-preview-content img {
+            max-width: 100%;
+            max-height: 65vh;
+            object-fit: contain;
+            border: var(--border-thin);
+            border-radius: 10px;
+            box-shadow: var(--shadow);
+        }
+
+        .binary-preview-content .binary-info {
+            margin-top: 20px;
+        }
+
+        .binary-preview-content .binary-info h3 {
+            font-family: 'Rubik', sans-serif;
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--text-dark);
+            margin-bottom: 8px;
+        }
+
+        .binary-preview-content .binary-info p {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        .btn-download {
+            display: inline-block;
+            margin-top: 18px;
+            padding: 10px 28px;
+            background: var(--blue);
+            color: white;
+            border-radius: 8px;
+            border: var(--border-thin);
+            font-family: 'Rubik', sans-serif;
+            font-weight: 800;
+            font-size: 13px;
+            text-decoration: none;
+            text-transform: uppercase;
+            box-shadow: var(--shadow);
+            transition: all 0.15s;
+        }
+
+        .btn-download:hover {
+            transform: translate(-1px, -1px);
+            box-shadow: 3px 3px 0px var(--text-dark);
+        }
+
+        .save-btn-download {
+            background: var(--blue);
+        }
+    
+        .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;background:var(--bg);font-family:'Inter',sans-serif;}
+        .login-card{background:#fff;border:var(--border-thick);border-radius:20px;padding:36px;width:100%;max-width:440px;box-shadow:var(--shadow);position:relative;}
+        .login-header{text-align:center;margin-bottom:28px}.login-header h1{font-family:'Rubik',sans-serif;font-size:26px;font-weight:900;margin-bottom:8px}.title-badge{display:inline-block;background:var(--cyan);padding:2px 10px;border-radius:6px;border:2px solid var(--text-dark);box-shadow:2px 2px 0 var(--text-dark);font-size:20px}.login-header p{font-size:14px;color:#666;margin-top:8px;line-height:1.5}.login-wrap .form-group{margin-bottom:20px}.login-wrap label{display:block;font-size:12px;font-weight:700;margin-bottom:6px;text-transform:uppercase;font-family:'Rubik',sans-serif}.login-wrap input{width:100%;background:#FAFAFA;border:var(--border-thick);border-radius:12px;padding:13px 16px;font-size:14px;box-shadow:3px 3px 0 var(--text-dark)}.btn-login{width:100%;background:var(--pink);color:#fff;border:var(--border-thick);border-radius:12px;padding:14px;font-weight:800;font-size:15px;cursor:pointer;box-shadow:3px 3px 0 var(--text-dark)}.back-link{display:block;margin-top:22px;text-align:center;color:var(--text-dark);font-weight:700;text-decoration:none;font-size:13px}.login-error{background:#FFF0F0;border:2px solid #E53935;color:#B71C1C;border-radius:10px;padding:10px 12px;margin-bottom:18px;font-size:13px;font-weight:600;}
+</style>
+</head>
+<body>
+    <header>
+        <div class="header-left">
+            <h2>📂</h2>
+            <span class="site-badge" id="siteBadge">—</span>
+        </div>
+        <div class="header-right">
+            <a href="#" id="viewSiteBtn" target="_blank" class="btn btn-view">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                Lihat Website
+            </a>
+            <a href="#" id="logoutBtn" class="btn btn-logout">🔒 Keluar</a>
+        </div>
+    </header>
+
+    <div class="workspace">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h3>✦ Daftar Berkas</h3>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn-icon" onclick="document.getElementById('uploadFileInput').click()" title="Unggah Berkas (gambar, audio, video, dokumen, font, arsip, dll.)">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    </button>
+                    <input type="file" id="uploadFileInput" multiple style="display: none;" onchange="handleUploadFiles(event)">
+                    <button class="btn-icon" onclick="promptCreateFile()" title="Buat Berkas Baru">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <ul class="tree-root" id="fileTreeRoot">
+                <li style="font-size:13px;color:var(--text-muted);text-align:center;padding-top:24px;font-weight:600;">Belum ada berkas tersedia.</li>
+            </ul>
+        </aside>
+
+        <!-- Editor Section -->
+        <main class="editor-container" id="editorScreen" style="display: none;">
+            <div class="editor-top-bar">
+                <span class="current-filename" id="editorFilename">index.html</span>
+                <button class="save-btn" onclick="saveCurrentFile()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                    💾 Simpan
+                </button>
+            </div>
+            <div id="codeEditorSection"></div>
+        </main>
+
+        <!-- Binary / Image Preview Panel -->
+        <main class="editor-container" id="binaryPreviewPanel" style="display: none;">
+            <div class="editor-top-bar">
+                <span class="current-filename" id="binaryFilename">file</span>
+                <a id="downloadBinaryBtn" href="#" target="_blank" class="save-btn save-btn-download" style="text-decoration: none;">⬇️ Unduh Berkas</a>
+            </div>
+            <div class="binary-preview-content" id="binaryPreviewContent"></div>
+        </main>
+
+        <!-- Placeholder No Selected File Screen -->
+        <div class="placeholder-screen" id="noSelectedPlaceholder">
+            <div class="placeholder-icon">✦</div>
+            <h2>Pilih Berkas untuk Diedit</h2>
+            <p>Klik salah satu berkas di panel sebelah kiri untuk membuka editor kode secara langsung.</p>
+        </div>
+    </div>
+
+    <script>
+
+        let editor = null;
+        let selectedFilePath = '';
+        let currentSiteId = '';
+        let currentSiteUrl = '';
+
+        const imageExt = new Set(['png','jpg','jpeg','gif','webp','bmp','ico','svg','avif','tiff','tif']);
+        const audioExt = new Set(['mp3','wav','ogg','m4a','flac','aac']);
+        const videoExt = new Set(['mp4','webm','avi','mov','flv','mkv']);
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            editor = ace.edit('codeEditorSection');
+            editor.setTheme('ace/theme/one_dark');
+            editor.setOptions({ fontSize: '13px', showPrintMargin: false, fontFamily: 'JetBrains Mono, monospace', enableBasicAutocompletion: true, useWorker: false });
+
+            document.getElementById('logoutBtn').addEventListener('click', async (event) => {
+                event.preventDefault();
+                await fetch('/manager/logout', { method: 'POST' });
+                window.location.href = '/file-manager';
+            });
+
+            await loadSession();
+        });
+
+        function esc(value) {
+            return String(value).replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
+        }
+
+        function formatSize(bytes) {
+            if (bytes >= 1024 * 1024 * 1024) return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+            if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+            if (bytes >= 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return bytes + ' B';
+        }
+
+        async function loadSession() {
+            const params = new URLSearchParams(window.location.search);
+            const prefill = params.get('siteId') || '';
+            const res = await fetch('/manager/session');
+            const data = await res.json();
+            if (data.authenticated) {
+                currentSiteId = data.siteId;
+                currentSiteUrl = data.siteUrl;
+                await loadManager();
+                return;
+            }
+            showLogin(prefill);
+        }
+
+        function showLogin(prefill) {
+            document.body.innerHTML = `
+                <div class="login-wrap">
+                    <div class="login-card">
+                        <div class="login-header">
+                            <h1>HIDZ <span class="title-badge">HOST</span></h1>
+                            <p>Masuk untuk mengelola berkas website Anda.</p>
+                        </div>
+                        <div id="loginError" class="login-error" style="display:none"></div>
+                        <form id="loginForm">
+                            <div class="form-group"><label for="loginSite">Slug Website</label><input id="loginSite" value="${esc(prefill)}" placeholder="contoh: portfolio" required autocomplete="off"></div>
+                            <div class="form-group"><label for="loginPassword">Kata Sandi</label><input id="loginPassword" type="password" placeholder="Masukkan kata sandi" required></div>
+                            <button class="btn-login" type="submit">🔐 Masuk ke Pengelola</button>
+                        </form>
+                        <a class="back-link" href="/">← Kembali ke HidzHost</a>
+                    </div>
+                </div>`;
+            document.getElementById('loginForm').addEventListener('submit', async (event) => {
+                event.preventDefault();
+                const errorBox = document.getElementById('loginError');
+                errorBox.style.display = 'none';
+                try {
+                    const res = await fetch('/manager/login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ site_id: document.getElementById('loginSite').value, password: document.getElementById('loginPassword').value }) });
+                    const data = await res.json();
+                    if (!res.ok || data.error) { errorBox.textContent = '⚠️ ' + (data.error || 'Login gagal.'); errorBox.style.display = 'block'; return; }
+                    currentSiteId = data.siteId;
+                    currentSiteUrl = `https://h.${currentSiteId}.hidzproject.my.id`;
+                    window.location.href = '/file-manager';
+                } catch (_) { errorBox.textContent = '⚠️ Tidak dapat terhubung ke server.'; errorBox.style.display = 'block'; }
+            });
+        }
+
+        async function loadManager() {
+            document.getElementById('siteBadge').textContent = currentSiteId;
+            document.getElementById('viewSiteBtn').href = currentSiteUrl;
+            await loadTree();
+        }
+
+        async function loadTree() {
+            const res = await fetch('/manager/api/tree');
+            const data = await res.json();
+            if (data.error) { alert(data.error); return; }
+            renderTree(data.tree || []);
+        }
+
+        function renderTree(tree) {
+            const root = document.getElementById('fileTreeRoot');
+            root.innerHTML = '';
+            if (!tree.length) {
+                root.innerHTML = '<li style="font-size:13px;color:var(--text-muted);text-align:center;padding-top:24px;font-weight:600;">Belum ada berkas tersedia.</li>';
+                return;
+            }
+            tree.forEach(node => root.appendChild(renderNode(node)));
+        }
+
+        function renderNode(node) {
+            const li = document.createElement('li');
+            li.className = 'tree-node';
+            const label = document.createElement('div');
+            label.className = 'tree-label' + (node.is_dir ? '' : ' file-node');
+            if (node.is_dir) label.style.fontWeight = '700';
+            label.dataset.path = node.path;
+            const info = document.createElement('div');
+            info.className = 'node-info';
+            info.innerHTML = `<span>${node.is_dir ? '📂' : esc(node.icon || '📄')}</span><span>${esc(node.name)}</span>`;
+            label.appendChild(info);
+            if (node.is_dir) {
+                const del = document.createElement('button');
+                del.className = 'node-delete-btn'; del.textContent = '✕';
+                del.addEventListener('click', event => deleteFile(node.path, event));
+                label.appendChild(del);
+                const children = document.createElement('ul');
+                children.style.cssText = 'list-style:none;padding-left:14px;margin-top:2px;';
+                (node.children || []).forEach(child => children.appendChild(renderNode(child)));
+                li.append(label, children);
+            } else {
+                const right = document.createElement('div');
+                right.style.cssText = 'display:flex;align-items:center;gap:8px;';
+                const size = document.createElement('span'); size.className='node-size'; size.textContent=formatSize(node.size || 0);
+                const del = document.createElement('button'); del.className='node-delete-btn'; del.textContent='✕';
+                del.addEventListener('click', event => deleteFile(node.path, event));
+                right.append(size, del); label.appendChild(right);
+                label.addEventListener('click', () => loadFile(node.path));
+                li.appendChild(label);
+            }
+            return li;
+        }
+
+        function showPanel(panel) {
+            document.getElementById('noSelectedPlaceholder').style.display = 'none';
+            document.getElementById('editorScreen').style.display = panel === 'editor' ? 'flex' : 'none';
+            document.getElementById('binaryPreviewPanel').style.display = panel === 'binary' ? 'flex' : 'none';
+        }
+
+        async function loadFile(filePath) {
+            selectedFilePath = filePath;
+            document.querySelectorAll('.file-node').forEach(node => node.classList.toggle('active', node.dataset.path === filePath));
+            try {
+                const res = await fetch(`/manager/api/get-file?file=${encodeURIComponent(filePath)}`);
+                const data = await res.json();
+                if (data.error) return alert('Terjadi kesalahan: ' + data.error);
+                document.getElementById('editorFilename').innerText = filePath;
+                const downloadUrl = `/manager/api/download-file?file=${encodeURIComponent(filePath)}`;
+                if (data.file_type === 'image') {
+                    showPanel('binary'); document.getElementById('binaryFilename').innerText=filePath; document.getElementById('downloadBinaryBtn').href=downloadUrl;
+                    document.getElementById('binaryPreviewContent').innerHTML=`<img src="data:${data.mime};base64,${data.content}" alt="${esc(data.filename)}"><div class="binary-info"><p>🖼️ ${esc(data.filename)}</p><a href="${downloadUrl}" target="_blank" class="btn-download">⬇️ Unduh Gambar</a></div>`;
+                } else if (data.file_type === 'audio') {
+                    showPanel('binary'); document.getElementById('binaryFilename').innerText=filePath; document.getElementById('downloadBinaryBtn').href=downloadUrl;
+                    document.getElementById('binaryPreviewContent').innerHTML=`<div style="font-size:64px;margin-bottom:16px">🎵</div><audio controls style="width:100%;max-width:420px;margin-bottom:16px" src="${downloadUrl}"></audio><div class="binary-info"><h3>${esc(data.filename)}</h3><p>Ukuran: <strong>${formatSize(data.size)}</strong></p><a href="${downloadUrl}" target="_blank" class="btn-download">⬇️ Unduh Audio</a></div>`;
+                } else if (data.file_type === 'video') {
+                    showPanel('binary'); document.getElementById('binaryFilename').innerText=filePath; document.getElementById('downloadBinaryBtn').href=downloadUrl;
+                    document.getElementById('binaryPreviewContent').innerHTML=`<video controls style="max-width:100%;max-height:360px;margin-bottom:16px" src="${downloadUrl}"></video><div class="binary-info"><h3>${esc(data.filename)}</h3><p>Ukuran: <strong>${formatSize(data.size)}</strong></p><a href="${downloadUrl}" target="_blank" class="btn-download">⬇️ Unduh Video</a></div>`;
+                } else if (data.file_type === 'binary') {
+                    showPanel('binary'); document.getElementById('binaryFilename').innerText=filePath; document.getElementById('downloadBinaryBtn').href=downloadUrl;
+                    document.getElementById('binaryPreviewContent').innerHTML=`<div style="font-size:64px;margin-bottom:16px">📦</div><div class="binary-info"><h3>${esc(data.filename)}</h3><p>Ukuran: <strong>${formatSize(data.size)}</strong> &nbsp;|&nbsp; Tipe: <strong>.${esc(data.ext || 'unknown')}</strong></p><p>Berkas biner tidak dapat dibuka di editor teks.</p><a href="${downloadUrl}" target="_blank" class="btn-download">⬇️ Unduh Berkas</a></div>`;
+                } else {
+                    showPanel('editor');
+                    const ext = filePath.split('.').pop().toLowerCase();
+                    const modes={html:'ace/mode/html',htm:'ace/mode/html',css:'ace/mode/css',scss:'ace/mode/css',sass:'ace/mode/css',less:'ace/mode/css',js:'ace/mode/javascript',mjs:'ace/mode/javascript',cjs:'ace/mode/javascript',jsx:'ace/mode/javascript',ts:'ace/mode/typescript',tsx:'ace/mode/typescript',json:'ace/mode/json',xml:'ace/mode/xml',svg:'ace/mode/xml',md:'ace/mode/markdown',py:'ace/mode/python',sql:'ace/mode/sql',sh:'ace/mode/sh',bat:'ace/mode/sh',yaml:'ace/mode/yaml',yml:'ace/mode/yaml'};
+                    editor.session.setMode(modes[ext] || 'ace/mode/text'); editor.setValue(data.content, -1);
+                }
+            } catch (_) { alert('Tidak dapat memuat berkas. Silakan coba lagi.'); }
+        }
+
+        async function saveCurrentFile() {
+            if (!selectedFilePath) return;
+            const saveBtn=document.querySelector('.save-btn'); saveBtn.disabled=true; saveBtn.innerText='⏳ Menyimpan...';
+            try {
+                const res=await fetch('/manager/api/save-file',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file:selectedFilePath,content:editor.getValue()})});
+                const data=await res.json(); if(data.error) alert('Gagal menyimpan: '+data.error); else toastSuccess();
+            } catch(_){alert('Koneksi ke server terputus.');}
+            finally{saveBtn.disabled=false;saveBtn.innerHTML='💾 Simpan';}
+        }
+
+        function toastSuccess(){const el=document.getElementById('editorFilename');const old=el.innerText;el.innerText='✓ Berkas Berhasil Disimpan!';el.style.background='#E8F5E9';el.style.borderColor='#00C853';setTimeout(()=>{el.innerText=old;el.style.background='white';el.style.borderColor='#1a1a2e';},2000);}
+
+        async function promptCreateFile(){
+            const name=prompt('Masukkan nama berkas baru (contoh: style.css atau sub/tentang.html):'); if(!name)return;
+            try{const res=await fetch('/manager/api/create-file',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:name})});const data=await res.json();if(data.error)alert('Gagal membuat berkas: '+data.error);else await loadTree();}catch(_){alert('Tidak dapat terhubung ke server.');}
+        }
+
+        async function handleUploadFiles(event){
+            const files=Array.from(event.target.files||[]);event.target.value='';if(!files.length)return;
+            let successCount=0;const failed=[];
+            for(const file of files){let overwrite=false;while(true){const fd=new FormData();fd.append('file',file);if(overwrite)fd.append('overwrite','1');try{const res=await fetch('/manager/api/upload-file',{method:'POST',body:fd});const data=await res.json();if(data.success){successCount++;break;}if(data.needs_confirm){if(!confirm(`Berkas "${data.filename}" sudah ada. Timpa dengan berkas baru?`)){failed.push(`${file.name} (dibatalkan)`);break;}overwrite=true;continue;}failed.push(`${file.name}: ${data.error}`);break;}catch(_){failed.push(`${file.name}: tidak dapat terhubung ke server`);break;}}}
+            if(failed.length)alert(`Selesai mengunggah.\n✅ Berhasil: ${successCount}\n❌ Gagal:\n${failed.join('\n')}`); if(successCount)await loadTree();
+        }
+
+        async function deleteFile(filePath,event){event.stopPropagation();if(!confirm(`Apakah Anda yakin ingin menghapus "${filePath}" secara permanen? Tindakan ini tidak dapat dibatalkan.`))return;try{const res=await fetch('/manager/api/delete-file',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file:filePath})});const data=await res.json();if(data.error)alert('Gagal menghapus: '+data.error);else{if(selectedFilePath===filePath){selectedFilePath='';document.getElementById('editorScreen').style.display='none';document.getElementById('binaryPreviewPanel').style.display='none';document.getElementById('noSelectedPlaceholder').style.display='flex';}await loadTree();}}catch(_){alert('Tidak dapat terhubung ke server.');}}
+        </script>
+</body>
+</html>

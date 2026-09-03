@@ -1,0 +1,22 @@
+{
+  "name": "hidzhost",
+  "version": "1.0.0",
+  "private": true,
+  "description": "HidzHost - instant file and website hosting for HidzProject",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "cookie-session": "^2.1.1",
+    "dotenv": "^16.6.1",
+    "express": "^5.1.0",
+    "multer": "^2.0.2",
+    "@vercel/blob": "^2.0.0",
+    "adm-zip": "^0.5.16"
+  }
+}
