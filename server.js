@@ -80,7 +80,7 @@ function managerUrl(slug) {
 }
 
 function hostnameSlug(hostname) {
-  const host = String(hostname || '').split(':')[0].toLowerCase().replace(/\.$/, '');
+  const host = String(hostname || '').split(',')[0].trim().split(':')[0].toLowerCase().replace(/\.$/, '');
   const base = `${HOST_PREFIX}.${BASE_DOMAIN}`;
   const prefix = `${HOST_PREFIX}.`;
   if (host === base || !host.endsWith(`.${BASE_DOMAIN}`)) return null;
@@ -88,6 +88,12 @@ function hostnameSlug(hostname) {
   if (!sub.startsWith(prefix)) return null;
   const slug = sub.slice(prefix.length);
   return validateSlug(slug) ? slug : null;
+}
+
+function requestHostname(req) {
+  const forwarded = req.headers['x-forwarded-host'];
+  const host = Array.isArray(forwarded) ? forwarded[0] : (forwarded || req.headers.host || req.hostname);
+  return String(host || '').split(',')[0].trim();
 }
 
 function safeRelativePath(value) {
@@ -184,9 +190,7 @@ async function siteExists(slug) {
 
 async function ensureSite(slug, password) {
   if (await siteExists(slug)) {
-    if (!(await verifyPassword(slug, password))) {
-      return { ok: false, error: 'Website ini sudah terdaftar. Silakan masukkan kata sandi yang sesuai atau gunakan nama lain.' };
-    }
+    return { ok: false, error: 'Slug "' + slug + '" sudah digunakan. Silakan pilih Custom Slug lain.' };
   }
   await writeMetadata(slug, password);
   return { ok: true };
@@ -511,7 +515,7 @@ app.get('/file-manager', (req, res) => res.sendFile(MANAGER_FILE));
 app.get('/file_manager.html', (req, res) => res.sendFile(MANAGER_FILE));
 
 app.use(async (req, res, next) => {
-  const slug = hostnameSlug(req.hostname);
+  const slug = hostnameSlug(requestHostname(req));
   if (!slug) return next();
   try {
     if (!(await siteExists(slug))) return res.status(404).send('Website tidak ditemukan.');

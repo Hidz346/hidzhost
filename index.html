@@ -670,12 +670,14 @@
                             type="text"
                             id="siteId"
                             name="siteId"
-                            placeholder="Akan dibuat otomatis dari nama berkas"
+                            placeholder="Contoh: project-final"
                             required
                             autocomplete="off"
-                            readonly
+                            maxlength="63"
+                            pattern="[a-z0-9][a-z0-9-]{0,61}[a-z0-9]"
                         >
                     </div>
+                    <small style="display:block; margin-top:7px; font-size:12px; opacity:.75;">Gunakan huruf kecil, angka, dan tanda hubung (-). Slug ini menjadi bagian dari URL: <strong>h.&lt;slug&gt;.hidzproject.my.id</strong></small>
                 </div>
 
                 <div class="form-group">
@@ -851,16 +853,17 @@
         }
 
         function updateGeneratedSlug() {
-            const siteInput = document.getElementById('siteId');
-            const files = Array.from(document.getElementById('zipfile').files || []);
-            if (currentActiveTab === 'zip' && files.length) {
-                siteInput.value = slugify(files[0].name.replace(/\.[^.]+$/, '')) || randomSlug();
-            } else if (currentActiveTab === 'paste') {
-                siteInput.value = randomSlug();
-            } else if (!files.length) {
-                siteInput.value = '';
-            }
+            // Slug sekarang sepenuhnya dipilih pengguna dan tidak lagi
+            // diubah otomatis berdasarkan nama file.
         }
+
+        const siteInput = document.getElementById('siteId');
+        siteInput.addEventListener('input', function() {
+            const cursor = this.selectionStart;
+            const cleaned = slugify(this.value);
+            this.value = cleaned;
+            try { this.setSelectionRange(Math.min(cursor, cleaned.length), Math.min(cursor, cleaned.length)); } catch (_) {}
+        });
 
         document.getElementById('hostingForm').addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -873,11 +876,11 @@
             submitBtn.disabled = true;
             submitBtn.innerText = '⏳ Memproses permintaan Anda...';
 
-            const siteIdValue = document.getElementById('siteId').value.trim().toLowerCase();
+            const siteIdValue = slugify(document.getElementById('siteId').value.trim());
             const passwordValue = document.getElementById('password').value;
 
             if (!siteIdValue) {
-                showError('Slug hosting belum tersedia. Pilih berkas terlebih dahulu atau gunakan tab tempel kode.');
+                showError('Silakan tentukan Custom Slug terlebih dahulu.');
                 resetButton();
                 return;
             }
