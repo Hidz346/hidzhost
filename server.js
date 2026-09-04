@@ -234,18 +234,6 @@ function fileType(filePath) {
   return 'binary';
 }
 
-// Ekstensi ini tetap dianggap "aset website" walau bukan html — browser/halaman
-// lain mungkin benar-benar fetch/pakai isinya apa adanya, jadi jangan dibungkus
-// jadi halaman kode.
-const WEB_ASSET_EXTS = new Set(['html', 'htm', 'css', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'scss', 'sass', 'less', 'vue', 'json', 'xml', 'svg']);
-
-// File teks/kode yang tidak mungkin jalan sebagai website statis (mis. .php, .py,
-// .sql, dll) — ini yang perlu ditampilkan sebagai halaman kode + salin/download,
-// bukan diunduh mentah sebagai octet-stream atau 404.
-function isCodeViewOnly(filePath) {
-  return fileType(filePath) === 'text' && !WEB_ASSET_EXTS.has(path.extname(filePath).slice(1).toLowerCase());
-}
-
 function iconFor(name) {
   const ext = path.extname(name).slice(1).toLowerCase();
   const icons = { html:'🌐',htm:'🌐',css:'🎨',scss:'🎨',sass:'🎨',less:'🎨',js:'⚡',mjs:'⚡',cjs:'⚡',ts:'⚡',tsx:'⚡',jsx:'⚡',vue:'⚡',json:'📋',yaml:'📋',yml:'📋',xml:'📋',toml:'📋',csv:'📊',md:'📝',txt:'📝',log:'📝',jpg:'🖼️',jpeg:'🖼️',png:'🖼️',gif:'🖼️',webp:'🖼️',ico:'🖼️',bmp:'🖼️',avif:'🖼️',svg:'🖼️',tiff:'🖼️',tif:'🖼️',pdf:'📕',doc:'📘',docx:'📘',xls:'📗',xlsx:'📗',ppt:'📙',pptx:'📙',mp4:'🎬',webm:'🎬',mov:'🎬',mkv:'🎬',avi:'🎬',flv:'🎬',mp3:'🎵',wav:'🎵',ogg:'🎵',flac:'🎵',m4a:'🎵',aac:'🎵',zip:'📦',tar:'📦',gz:'📦',rar:'📦','7z':'📦',sql:'🗄️',db:'🗄️',sqlite:'🗄️',py:'💻',rb:'💻',go:'💻',sh:'💻',bat:'💻',rs:'💻',c:'💻',cpp:'💻',h:'💻',php:'💻',kt:'💻',swift:'💻',dart:'💻',pl:'💻',ini:'⚙️',jar:'☕',war:'☕',java:'☕',dll:'⚙️',conf:'⚙️',htaccess:'⚙️',ttf:'🔤',woff:'🔤',woff2:'🔤',otf:'🔤',env:'🔒' };
@@ -362,10 +350,11 @@ function formatBytes(bytes) {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function renderCodeViewerPage({ filename, code, size, icon, downloadHref }) {
+function renderCodeViewerPage({ filename, code, size, icon, downloadHref, listHref }) {
   const safeName = escapeHtml(filename);
   const safeCodeJson = JSON.stringify(code);
   const lineCount = code.split('\n').length;
+  const backBtn = listHref ? `<a class="btn back" href="${listHref}">🗂️ Semua Berkas</a>` : '';
   return `<!DOCTYPE html>
 <html lang="id">
 <head>
@@ -406,6 +395,7 @@ function renderCodeViewerPage({ filename, code, size, icon, downloadHref }) {
     <span class="meta">${formatBytes(size)} · ${lineCount} baris</span>
   </div>
   <div class="actions">
+    ${backBtn}
     <button class="btn copy" id="copyBtn" onclick="copyCode()">📋 Salin Kode</button>
     <a class="btn dl" href="${downloadHref}" download="${safeName}">⬇️ Download</a>
   </div>
@@ -424,6 +414,61 @@ function renderCodeViewerPage({ filename, code, size, icon, downloadHref }) {
       });
     }
   </script>
+</body>
+</html>`;
+}
+
+function renderFileListPage({ siteId, files }) {
+  const items = files
+    .map(blob => ({ rel: blob.pathname.replace(/^sites\/[^/]+\//, ''), size: blob.size || 0 }))
+    .filter(item => item.rel)
+    .sort((a, b) => a.rel.localeCompare(b.rel));
+  const rowsHtml = items.map(item => {
+    const href = `/${item.rel.split('/').map(encodeURIComponent).join('/')}`;
+    return `<a class="row" href="${href}">
+      <span class="ic">${iconFor(item.rel)}</span>
+      <span class="fn">${escapeHtml(item.rel)}</span>
+      <span class="sz">${formatBytes(item.size)}</span>
+    </a>`;
+  }).join('\n');
+  const safeSiteId = escapeHtml(siteId);
+  return `<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${safeSiteId} — HidzHost</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #FFF5F9; --card-bg: #FFFFFF; --text-dark: #1a1a2e;
+    --yellow: #FFE600; --border: 3px solid #1a1a2e; --shadow: 6px 6px 0px #1a1a2e; --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text-dark); font-family: 'Space Grotesk', sans-serif; padding: 16px; }
+  .bar { background: var(--yellow); border: var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
+         padding: 14px 18px; margin-bottom: 18px; }
+  .bar h1 { margin: 0; font-size: 18px; word-break: break-all; }
+  .bar p { margin: 6px 0 0; font-size: 12px; opacity: 0.75; font-family: 'JetBrains Mono', monospace; }
+  .list { display: flex; flex-direction: column; gap: 10px; }
+  .row { display: flex; align-items: center; gap: 10px; background: var(--card-bg); border: var(--border);
+         border-radius: 10px; box-shadow: 4px 4px 0px #1a1a2e; padding: 12px 14px; text-decoration: none;
+         color: var(--text-dark); font-family: 'JetBrains Mono', monospace; font-size: 13px; transition: transform 0.1s; }
+  .row:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0px #1a1a2e; }
+  .fn { flex: 1; word-break: break-all; }
+  .sz { opacity: 0.6; font-size: 11px; white-space: nowrap; }
+  footer { text-align: center; font-size: 11px; opacity: 0.5; margin-top: 20px; font-family: 'Space Grotesk', sans-serif; }
+</style>
+</head>
+<body>
+  <div class="bar">
+    <h1>📁 ${safeSiteId}</h1>
+    <p>Bukan berupa website — ${items.length} berkas tersedia. Ketuk untuk lihat kode & download.</p>
+  </div>
+  <div class="list">
+    ${rowsHtml || '<p>Tidak ada berkas.</p>'}
+  </div>
+  <footer>Disajikan oleh HidzHost</footer>
 </body>
 </html>`;
 }
@@ -615,15 +660,23 @@ app.use(async (req, res, next) => {
     if (!relative) relative = 'index.html';
     const clean = safeRelativePath(relative);
     if (!clean) return res.status(400).send('Path tidak valid.');
-    const blob = await findBlob(blobKey(slug, clean));
-    if (blob && blob.pathname === blobKey(slug, clean)) {
-      const response = await fetch(blob.url);
-      if (!response.ok) return res.status(404).send('Berkas tidak ditemukan.');
-      const buffer = Buffer.from(await response.arrayBuffer());
-      const wantsRaw = req.query.raw !== undefined;
-      if (!wantsRaw && isCodeViewOnly(clean) && buffer.length <= 2 * 1024 * 1024) {
-        // Berkas tidak bisa jadi website (mis. .php/.py/.sql/dll): tampilkan sebagai
-        // halaman kode dengan tombol salin & download, bukan diunduh mentah.
+
+    const files = await listSiteFiles(slug);
+    // Situs dianggap "beneran website" hanya kalau ada minimal 1 berkas HTML di dalamnya.
+    // Kalau tidak ada HTML sama sekali, berkas apa pun di situs ini tidak mungkin jadi
+    // halaman web, jadi selalu ditampilkan sebagai kode + tombol download (bukan mentah).
+    const hasHtml = files.some(f => /\.html?$/i.test(f.pathname));
+    const wantsRaw = req.query.raw === '1';
+    const blob = files.find(f => f.pathname === blobKey(slug, clean)) || null;
+
+    if (blob) {
+      const ext = path.extname(clean).slice(1).toLowerCase();
+      const isHtmlFile = ext === 'html' || ext === 'htm';
+      const showAsCode = !isHtmlFile && !hasHtml && !wantsRaw && fileType(clean) === 'text' && (blob.size || 0) <= 2 * 1024 * 1024;
+      if (showAsCode) {
+        const response = await fetch(blob.url);
+        if (!response.ok) return res.status(404).send('Berkas tidak ditemukan.');
+        const buffer = Buffer.from(await response.arrayBuffer());
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-cache');
         return res.send(renderCodeViewerPage({
@@ -631,19 +684,23 @@ app.use(async (req, res, next) => {
           code: buffer.toString('utf8'),
           size: blob.size,
           icon: iconFor(clean),
-          downloadHref: `/${clean.split('/').map(encodeURIComponent).join('/')}?raw=1`
+          downloadHref: `/${clean.split('/').map(encodeURIComponent).join('/')}?raw=1`,
+          listHref: files.length > 1 ? '/' : null
         }));
       }
+      const response = await fetch(blob.url);
+      if (!response.ok) return res.status(404).send('Berkas tidak ditemukan.');
       res.setHeader('Content-Type', blob.contentType || getMime(clean));
-      if (wantsRaw && isCodeViewOnly(clean)) {
+      if (wantsRaw && !isHtmlFile) {
         res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(clean))}`);
       }
       res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=31536000, stale-while-revalidate=86400');
-      return res.end(buffer);
+      return res.end(Buffer.from(await response.arrayBuffer()));
     }
+
     if (!path.extname(clean)) {
-      const indexBlob = await findBlob(blobKey(slug, 'index.html'));
-      if (indexBlob && indexBlob.pathname === blobKey(slug, 'index.html')) {
+      const indexBlob = files.find(f => f.pathname === blobKey(slug, 'index.html'));
+      if (indexBlob) {
         const response = await fetch(indexBlob.url);
         if (response.ok) {
           res.setHeader('Content-Type', indexBlob.contentType || 'text/html; charset=utf-8');
@@ -652,9 +709,9 @@ app.use(async (req, res, next) => {
         }
       }
     }
+
     if (req.path === '/') {
       // Situs tanpa index.html (mis. hasil upload 1 file tunggal: foto/video/docx/kode/dll).
-      const files = await listSiteFiles(slug);
       if (files.length === 1) {
         const only = files[0];
         const relPath = only.pathname.slice(blobKey(slug, '').length);
@@ -668,7 +725,7 @@ app.use(async (req, res, next) => {
             res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=31536000, stale-while-revalidate=86400');
             return res.end(buffer);
           }
-          if (isCodeViewOnly(relPath) && buffer.length <= 2 * 1024 * 1024) {
+          if (fileType(relPath) === 'text' && buffer.length <= 2 * 1024 * 1024) {
             // Berkas kode/teks yang tidak bisa jadi website: tampilkan sebagai kode + tombol salin/download.
             res.setHeader('Content-Type', 'text/html; charset=utf-8');
             res.setHeader('Cache-Control', 'no-cache');
@@ -685,8 +742,13 @@ app.use(async (req, res, next) => {
           res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=31536000, stale-while-revalidate=86400');
           return res.end(buffer);
         }
+      } else if (files.length > 1 && !hasHtml) {
+        // Kumpulan berkas (bukan zip website): tampilkan daftar semua berkas,
+        // masing-masing bisa dibuka sebagai kode atau didownload.
+        return res.send(renderFileListPage({ siteId: slug, files }));
       }
     }
+
     return res.status(404).send('Berkas tidak ditemukan.');
   } catch (error) {
     console.error(error);
