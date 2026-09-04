@@ -540,6 +540,20 @@ app.use(async (req, res, next) => {
         }
       }
     }
+    if (req.path === '/') {
+      // Situs tanpa index.html (mis. hasil upload 1 file tunggal: foto/video/docx/dll).
+      // Kalau isinya cuma 1 berkas, sajikan berkas itu langsung sebagai halaman utama.
+      const files = await listSiteFiles(slug);
+      if (files.length === 1) {
+        const only = files[0];
+        const response = await fetch(only.url);
+        if (response.ok) {
+          res.setHeader('Content-Type', only.contentType || getMime(only.pathname));
+          res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=31536000, stale-while-revalidate=86400');
+          return res.end(Buffer.from(await response.arrayBuffer()));
+        }
+      }
+    }
     return res.status(404).send('Berkas tidak ditemukan.');
   } catch (error) {
     console.error(error);
