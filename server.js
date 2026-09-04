@@ -15,6 +15,19 @@ const PUBLIC_BASE_URL = String(process.env.PUBLIC_BASE_URL || `https://${HOST_PR
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(48).toString('hex');
 const MAX_UPLOAD_MB = Math.min(4, Math.max(1, Number(process.env.MAX_UPLOAD_MB || 4)));
 const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
+const BLOB_STORE_ID = process.env.BLOB_STORE_ID || '';
+const BLOB_READ_WRITE_TOKEN = process.env.BLOB_READ_WRITE_TOKEN || '';
+const VERCEL_OIDC_TOKEN = process.env.VERCEL_OIDC_TOKEN || '';
+
+// Vercel's current Blob connection model can authenticate with OIDC + store ID.
+// Keep static-token support as a fallback for older/manual Blob connections.
+function blobAuthOptions() {
+  const options = {};
+  if (BLOB_STORE_ID) options.storeId = BLOB_STORE_ID;
+  if (VERCEL_OIDC_TOKEN) options.oidcToken = VERCEL_OIDC_TOKEN;
+  if (BLOB_READ_WRITE_TOKEN) options.token = BLOB_READ_WRITE_TOKEN;
+  return options;
+}
 const INDEX_FILE = path.join(__dirname, 'index.html');
 const MANAGER_FILE = path.join(__dirname, 'file_manager.html');
 
@@ -100,7 +113,7 @@ function metadataKey(slug) {
 }
 
 async function findBlob(pathname) {
-  const result = await list({ prefix: pathname, limit: 10 });
+  const result = await list({ prefix: pathname, limit: 10, ...blobAuthOptions() });
   return result.blobs.find(blob => blob.pathname === pathname) || result.blobs[0] || null;
 }
 
@@ -132,8 +145,10 @@ async function writeMetadata(slug, password) {
   };
   await put(metadataKey(slug), JSON.stringify(payload), {
     access: 'public',
+    ...blobAuthOptions(),
     contentType: 'application/json',
     addRandomSuffix: false,
+    allowOverwrite: true,
     cacheControlMaxAge: 0
   });
 }
@@ -228,7 +243,7 @@ async function listSiteFiles(slug) {
   const blobs = [];
   let cursor;
   do {
-    const result = await list({ prefix, cursor, limit: 1000 });
+    const result = await list({ prefix, cursor, limit: 1000, ...blobAuthOptions() });
     blobs.push(...result.blobs);
     cursor = result.hasMore ? result.cursor : undefined;
   } while (cursor);
@@ -271,8 +286,10 @@ async function putSiteFile(slug, relative, content) {
   if (!clean) throw new Error('Nama berkas tidak valid.');
   return put(blobKey(slug, clean), content, {
     access: 'public',
+    ...blobAuthOptions(),
     contentType: getMime(clean),
     addRandomSuffix: false,
+    allowOverwrite: true,
     cacheControlMaxAge: 0
   });
 }
@@ -281,9 +298,9 @@ async function deleteSitePath(slug, relative) {
   const clean = safeRelativePath(relative);
   if (!clean) return false;
   const prefix = `${blobKey(slug, clean)}`;
-  const result = await list({ prefix, limit: 1000 });
+  const result = await list({ prefix, limit: 1000, ...blobAuthOptions() });
   const exact = result.blobs.filter(blob => blob.pathname === prefix || blob.pathname.startsWith(`${prefix}/`));
-  if (exact.length) await del(exact.map(blob => blob.url));
+  if (exact.length) await del(exact.map(blob => blob.url), blobAuthOptions());
   return exact.length > 0;
 }
 
