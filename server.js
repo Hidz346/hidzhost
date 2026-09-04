@@ -72,7 +72,7 @@ function validateSlug(slug) {
 }
 
 function siteUrl(slug) {
-  return `https://${HOST_PREFIX}.${slug}.${BASE_DOMAIN}`;
+  return `https://${slug}.${HOST_PREFIX}.${BASE_DOMAIN}`;
 }
 
 function managerUrl(slug) {
@@ -82,11 +82,9 @@ function managerUrl(slug) {
 function hostnameSlug(hostname) {
   const host = String(hostname || '').split(',')[0].trim().split(':')[0].toLowerCase().replace(/\.$/, '');
   const base = `${HOST_PREFIX}.${BASE_DOMAIN}`;
-  const prefix = `${HOST_PREFIX}.`;
-  if (host === base || !host.endsWith(`.${BASE_DOMAIN}`)) return null;
-  const sub = host.slice(0, -(`.${BASE_DOMAIN}`).length);
-  if (!sub.startsWith(prefix)) return null;
-  const slug = sub.slice(prefix.length);
+  const suffix = `.${base}`;
+  if (host === base || !host.endsWith(suffix)) return null;
+  const slug = host.slice(0, -suffix.length);
   return validateSlug(slug) ? slug : null;
 }
 
@@ -565,7 +563,7 @@ if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`HidzHost berjalan di port ${PORT}`);
     console.log(`Base: ${PUBLIC_BASE_URL}`);
-    console.log(`Wildcard: https://${HOST_PREFIX}.<slug>.${BASE_DOMAIN}`);
+    console.log(`Wildcard: https://<slug>.${HOST_PREFIX}.${BASE_DOMAIN}`);
   });
 }
 

@@ -13,8 +13,8 @@ https://h.hidzproject.my.id
 Website yang dibuat user:
 
 ```text
-https://h.my-file.hidzproject.my.id
-https://h.project-final.hidzproject.my.id
+https://my-file.h.hidzproject.my.id
+https://project-final.h.hidzproject.my.id
 ```
 
 Slug berasal dari nama file yang diupload. Paste HTML tanpa nama file menggunakan random slug.
@@ -113,7 +113,7 @@ Paste HTML atau upload file ZIP kecil (maksimal sekitar 4 MB pada alur server in
 Contoh hasil:
 
 ```text
-https://h.my-project.hidzproject.my.id
+https://my-project.h.hidzproject.my.id
 ```
 
 Buka URL tersebut. Request akan membaca hostname, mengambil slug `my-project`, mencari objek Blob yang sesuai, lalu menyajikan `index.html` atau file yang diminta.
@@ -124,5 +124,5 @@ Buka URL tersebut. Request akan membaca hostname, mengambil slug `my-project`, m
 - Tidak menggunakan API Vercel Deployments atau API Netlify.
 - Vercel dipakai sebagai platform aplikasi dan Vercel Blob sebagai persistent storage.
 - `h.hidzproject.my.id` adalah entry point HidzHost.
-- `h.<slug>.hidzproject.my.id` adalah URL hosting yang sebenarnya.
+- `<slug>.h.hidzproject.my.id` adalah URL hosting yang sebenarnya.
 - `s.hidzproject.my.id` tidak disentuh oleh project ini.
