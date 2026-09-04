@@ -505,7 +505,7 @@ app.get('/manager/api/download-file', requireManagerAuth, async (req, res) => {
     res.setHeader('Content-Type', blob.contentType || getMime(relative));
     res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(relative))}`);
     res.setHeader('Cache-Control', 'no-cache');
-    Buffer.from(await response.arrayBuffer()).pipe(res);
+    res.end(Buffer.from(await response.arrayBuffer()));
   } catch (error) { console.error(error); res.status(500).send('Gagal mengunduh berkas.'); }
 });
 
@@ -527,7 +527,7 @@ app.use(async (req, res, next) => {
       if (!response.ok) return res.status(404).send('Berkas tidak ditemukan.');
       res.setHeader('Content-Type', blob.contentType || getMime(clean));
       res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=31536000, stale-while-revalidate=86400');
-      return Buffer.from(await response.arrayBuffer()).pipe(res);
+      return res.end(Buffer.from(await response.arrayBuffer()));
     }
     if (!path.extname(clean)) {
       const indexBlob = await findBlob(blobKey(slug, 'index.html'));
@@ -536,7 +536,7 @@ app.use(async (req, res, next) => {
         if (response.ok) {
           res.setHeader('Content-Type', indexBlob.contentType || 'text/html; charset=utf-8');
           res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=31536000, stale-while-revalidate=86400');
-          return Buffer.from(await response.arrayBuffer()).pipe(res);
+          return res.end(Buffer.from(await response.arrayBuffer()));
         }
       }
     }
