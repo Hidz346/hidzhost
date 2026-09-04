@@ -234,6 +234,18 @@ function fileType(filePath) {
   return 'binary';
 }
 
+// Ekstensi ini tetap dianggap "aset website" walau bukan html — browser/halaman
+// lain mungkin benar-benar fetch/pakai isinya apa adanya, jadi jangan dibungkus
+// jadi halaman kode.
+const WEB_ASSET_EXTS = new Set(['html', 'htm', 'css', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'scss', 'sass', 'less', 'vue', 'json', 'xml', 'svg']);
+
+// File teks/kode yang tidak mungkin jalan sebagai website statis (mis. .php, .py,
+// .sql, dll) — ini yang perlu ditampilkan sebagai halaman kode + salin/download,
+// bukan diunduh mentah sebagai octet-stream atau 404.
+function isCodeViewOnly(filePath) {
+  return fileType(filePath) === 'text' && !WEB_ASSET_EXTS.has(path.extname(filePath).slice(1).toLowerCase());
+}
+
 function iconFor(name) {
   const ext = path.extname(name).slice(1).toLowerCase();
   const icons = { html:'🌐',htm:'🌐',css:'🎨',scss:'🎨',sass:'🎨',less:'🎨',js:'⚡',mjs:'⚡',cjs:'⚡',ts:'⚡',tsx:'⚡',jsx:'⚡',vue:'⚡',json:'📋',yaml:'📋',yml:'📋',xml:'📋',toml:'📋',csv:'📊',md:'📝',txt:'📝',log:'📝',jpg:'🖼️',jpeg:'🖼️',png:'🖼️',gif:'🖼️',webp:'🖼️',ico:'🖼️',bmp:'🖼️',avif:'🖼️',svg:'🖼️',tiff:'🖼️',tif:'🖼️',pdf:'📕',doc:'📘',docx:'📘',xls:'📗',xlsx:'📗',ppt:'📙',pptx:'📙',mp4:'🎬',webm:'🎬',mov:'🎬',mkv:'🎬',avi:'🎬',flv:'🎬',mp3:'🎵',wav:'🎵',ogg:'🎵',flac:'🎵',m4a:'🎵',aac:'🎵',zip:'📦',tar:'📦',gz:'📦',rar:'📦','7z':'📦',sql:'🗄️',db:'🗄️',sqlite:'🗄️',py:'💻',rb:'💻',go:'💻',sh:'💻',bat:'💻',rs:'💻',c:'💻',cpp:'💻',h:'💻',php:'💻',kt:'💻',swift:'💻',dart:'💻',pl:'💻',ini:'⚙️',jar:'☕',war:'☕',java:'☕',dll:'⚙️',conf:'⚙️',htaccess:'⚙️',ttf:'🔤',woff:'🔤',woff2:'🔤',otf:'🔤',env:'🔒' };
@@ -607,9 +619,27 @@ app.use(async (req, res, next) => {
     if (blob && blob.pathname === blobKey(slug, clean)) {
       const response = await fetch(blob.url);
       if (!response.ok) return res.status(404).send('Berkas tidak ditemukan.');
+      const buffer = Buffer.from(await response.arrayBuffer());
+      const wantsRaw = req.query.raw !== undefined;
+      if (!wantsRaw && isCodeViewOnly(clean) && buffer.length <= 2 * 1024 * 1024) {
+        // Berkas tidak bisa jadi website (mis. .php/.py/.sql/dll): tampilkan sebagai
+        // halaman kode dengan tombol salin & download, bukan diunduh mentah.
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-cache');
+        return res.send(renderCodeViewerPage({
+          filename: clean,
+          code: buffer.toString('utf8'),
+          size: blob.size,
+          icon: iconFor(clean),
+          downloadHref: `/${clean.split('/').map(encodeURIComponent).join('/')}?raw=1`
+        }));
+      }
       res.setHeader('Content-Type', blob.contentType || getMime(clean));
+      if (wantsRaw && isCodeViewOnly(clean)) {
+        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(clean))}`);
+      }
       res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=31536000, stale-while-revalidate=86400');
-      return res.end(Buffer.from(await response.arrayBuffer()));
+      return res.end(buffer);
     }
     if (!path.extname(clean)) {
       const indexBlob = await findBlob(blobKey(slug, 'index.html'));
@@ -638,7 +668,7 @@ app.use(async (req, res, next) => {
             res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=31536000, stale-while-revalidate=86400');
             return res.end(buffer);
           }
-          if (fileType(relPath) === 'text' && buffer.length <= 2 * 1024 * 1024) {
+          if (isCodeViewOnly(relPath) && buffer.length <= 2 * 1024 * 1024) {
             // Berkas kode/teks yang tidak bisa jadi website: tampilkan sebagai kode + tombol salin/download.
             res.setHeader('Content-Type', 'text/html; charset=utf-8');
             res.setHeader('Cache-Control', 'no-cache');
@@ -647,7 +677,7 @@ app.use(async (req, res, next) => {
               code: buffer.toString('utf8'),
               size: only.size,
               icon: iconFor(relPath),
-              downloadHref: `/${relPath.split('/').map(encodeURIComponent).join('/')}`
+              downloadHref: `/${relPath.split('/').map(encodeURIComponent).join('/')}?raw=1`
             }));
           }
           // Gambar/video/audio/dokumen/binary lain: sajikan langsung apa adanya.
