@@ -226,7 +226,7 @@ function fileType(filePath) {
   const image = new Set(['png','jpg','jpeg','gif','webp','bmp','ico','svg','avif','tiff','tif']);
   const audio = new Set(['mp3','wav','ogg','m4a','flac','aac']);
   const video = new Set(['mp4','webm','avi','mov','flv','mkv']);
-  const text = new Set(['html','htm','css','js','mjs','cjs','ts','tsx','jsx','scss','sass','less','vue','json','xml','yaml','yml','toml','csv','md','txt','log','conf','env','htaccess','sql','sh','bat','c','cpp','h','java','rs','py','rb','go']);
+  const text = new Set(['html','htm','css','js','mjs','cjs','ts','tsx','jsx','scss','sass','less','vue','json','xml','yaml','yml','toml','csv','md','txt','log','conf','env','htaccess','sql','sh','bat','c','cpp','h','java','rs','py','rb','go','php','ini','kt','swift','dart','pl']);
   if (image.has(ext)) return 'image';
   if (audio.has(ext)) return 'audio';
   if (video.has(ext)) return 'video';
@@ -236,7 +236,7 @@ function fileType(filePath) {
 
 function iconFor(name) {
   const ext = path.extname(name).slice(1).toLowerCase();
-  const icons = { html:'🌐',htm:'🌐',css:'🎨',scss:'🎨',sass:'🎨',less:'🎨',js:'⚡',mjs:'⚡',cjs:'⚡',ts:'⚡',tsx:'⚡',jsx:'⚡',vue:'⚡',json:'📋',yaml:'📋',yml:'📋',xml:'📋',toml:'📋',csv:'📊',md:'📝',txt:'📝',log:'📝',jpg:'🖼️',jpeg:'🖼️',png:'🖼️',gif:'🖼️',webp:'🖼️',ico:'🖼️',bmp:'🖼️',avif:'🖼️',svg:'🖼️',tiff:'🖼️',tif:'🖼️',pdf:'📕',doc:'📘',docx:'📘',xls:'📗',xlsx:'📗',ppt:'📙',pptx:'📙',mp4:'🎬',webm:'🎬',mov:'🎬',mkv:'🎬',avi:'🎬',flv:'🎬',mp3:'🎵',wav:'🎵',ogg:'🎵',flac:'🎵',m4a:'🎵',aac:'🎵',zip:'📦',tar:'📦',gz:'📦',rar:'📦','7z':'📦',sql:'🗄️',db:'🗄️',sqlite:'🗄️',py:'💻',rb:'💻',go:'💻',sh:'💻',bat:'💻',rs:'💻',c:'💻',cpp:'💻',h:'💻',jar:'☕',war:'☕',java:'☕',dll:'⚙️',conf:'⚙️',htaccess:'⚙️',ttf:'🔤',woff:'🔤',woff2:'🔤',otf:'🔤',env:'🔒' };
+  const icons = { html:'🌐',htm:'🌐',css:'🎨',scss:'🎨',sass:'🎨',less:'🎨',js:'⚡',mjs:'⚡',cjs:'⚡',ts:'⚡',tsx:'⚡',jsx:'⚡',vue:'⚡',json:'📋',yaml:'📋',yml:'📋',xml:'📋',toml:'📋',csv:'📊',md:'📝',txt:'📝',log:'📝',jpg:'🖼️',jpeg:'🖼️',png:'🖼️',gif:'🖼️',webp:'🖼️',ico:'🖼️',bmp:'🖼️',avif:'🖼️',svg:'🖼️',tiff:'🖼️',tif:'🖼️',pdf:'📕',doc:'📘',docx:'📘',xls:'📗',xlsx:'📗',ppt:'📙',pptx:'📙',mp4:'🎬',webm:'🎬',mov:'🎬',mkv:'🎬',avi:'🎬',flv:'🎬',mp3:'🎵',wav:'🎵',ogg:'🎵',flac:'🎵',m4a:'🎵',aac:'🎵',zip:'📦',tar:'📦',gz:'📦',rar:'📦','7z':'📦',sql:'🗄️',db:'🗄️',sqlite:'🗄️',py:'💻',rb:'💻',go:'💻',sh:'💻',bat:'💻',rs:'💻',c:'💻',cpp:'💻',h:'💻',php:'💻',kt:'💻',swift:'💻',dart:'💻',pl:'💻',ini:'⚙️',jar:'☕',war:'☕',java:'☕',dll:'⚙️',conf:'⚙️',htaccess:'⚙️',ttf:'🔤',woff:'🔤',woff2:'🔤',otf:'🔤',env:'🔒' };
   return icons[ext] || '📄';
 }
 
@@ -332,6 +332,88 @@ async function extractZipBuffer(buffer, slug) {
     count++;
   }
   return count;
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatBytes(bytes) {
+  const n = Number(bytes) || 0;
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function renderCodeViewerPage({ filename, code, size, icon, downloadHref }) {
+  const safeName = escapeHtml(filename);
+  const safeCodeJson = JSON.stringify(code);
+  const lineCount = code.split('\n').length;
+  return `<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${safeName} — HidzHost</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #FFF5F9; --card-bg: #FFFFFF; --text-dark: #1a1a2e;
+    --yellow: #FFE600; --lime: #BFFF00; --pink: #FF2D78;
+    --border: 3px solid #1a1a2e; --shadow: 6px 6px 0px #1a1a2e; --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text-dark); font-family: 'JetBrains Mono', monospace; padding: 16px; }
+  .bar { background: var(--yellow); border: var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
+         padding: 14px 18px; margin-bottom: 18px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .bar .name { font-family: 'Space Grotesk', sans-serif; font-weight: 800; font-size: 16px; word-break: break-all; }
+  .bar .meta { font-size: 12px; opacity: 0.75; margin-left: auto; }
+  .actions { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+  .btn { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 14px; cursor: pointer;
+         border: var(--border); border-radius: 10px; box-shadow: 4px 4px 0px #1a1a2e; padding: 10px 18px;
+         background: var(--card-bg); color: var(--text-dark); text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+         transition: transform 0.1s; }
+  .btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0px #1a1a2e; }
+  .btn.copy { background: var(--lime); }
+  .btn.dl { background: var(--pink); color: #fff; }
+  pre { background: var(--card-bg); border: var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
+        padding: 18px; overflow-x: auto; margin: 0; }
+  code { font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.6; white-space: pre; }
+  footer { text-align: center; font-size: 11px; opacity: 0.5; margin-top: 20px; font-family: 'Space Grotesk', sans-serif; }
+</style>
+</head>
+<body>
+  <div class="bar">
+    <span>${icon}</span>
+    <span class="name">${safeName}</span>
+    <span class="meta">${formatBytes(size)} · ${lineCount} baris</span>
+  </div>
+  <div class="actions">
+    <button class="btn copy" id="copyBtn" onclick="copyCode()">📋 Salin Kode</button>
+    <a class="btn dl" href="${downloadHref}" download="${safeName}">⬇️ Download</a>
+  </div>
+  <pre><code id="codeBlock"></code></pre>
+  <footer>Disajikan oleh HidzHost — berkas ini tidak bisa dijalankan sebagai website, jadi ditampilkan sebagai kode.</footer>
+  <script id="code-data" type="application/json">${safeCodeJson}</script>
+  <script>
+    const codeText = JSON.parse(document.getElementById('code-data').textContent);
+    document.getElementById('codeBlock').textContent = codeText;
+    function copyCode() {
+      navigator.clipboard.writeText(codeText).then(() => {
+        const btn = document.getElementById('copyBtn');
+        const original = btn.innerHTML;
+        btn.innerHTML = '✅ Tersalin!';
+        setTimeout(() => { btn.innerHTML = original; }, 1500);
+      });
+    }
+  </script>
+</body>
+</html>`;
 }
 
 async function requireManagerAuth(req, res, next) {
@@ -541,16 +623,37 @@ app.use(async (req, res, next) => {
       }
     }
     if (req.path === '/') {
-      // Situs tanpa index.html (mis. hasil upload 1 file tunggal: foto/video/docx/dll).
-      // Kalau isinya cuma 1 berkas, sajikan berkas itu langsung sebagai halaman utama.
+      // Situs tanpa index.html (mis. hasil upload 1 file tunggal: foto/video/docx/kode/dll).
       const files = await listSiteFiles(slug);
       if (files.length === 1) {
         const only = files[0];
+        const relPath = only.pathname.slice(blobKey(slug, '').length);
+        const ext = path.extname(relPath).slice(1).toLowerCase();
         const response = await fetch(only.url);
         if (response.ok) {
-          res.setHeader('Content-Type', only.contentType || getMime(only.pathname));
+          const buffer = Buffer.from(await response.arrayBuffer());
+          if (ext === 'html' || ext === 'htm') {
+            // Tetap bisa jadi website kalau memang berupa halaman HTML.
+            res.setHeader('Content-Type', only.contentType || getMime(relPath));
+            res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=31536000, stale-while-revalidate=86400');
+            return res.end(buffer);
+          }
+          if (fileType(relPath) === 'text' && buffer.length <= 2 * 1024 * 1024) {
+            // Berkas kode/teks yang tidak bisa jadi website: tampilkan sebagai kode + tombol salin/download.
+            res.setHeader('Content-Type', 'text/html; charset=utf-8');
+            res.setHeader('Cache-Control', 'no-cache');
+            return res.send(renderCodeViewerPage({
+              filename: relPath,
+              code: buffer.toString('utf8'),
+              size: only.size,
+              icon: iconFor(relPath),
+              downloadHref: `/${relPath.split('/').map(encodeURIComponent).join('/')}`
+            }));
+          }
+          // Gambar/video/audio/dokumen/binary lain: sajikan langsung apa adanya.
+          res.setHeader('Content-Type', only.contentType || getMime(relPath));
           res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=31536000, stale-while-revalidate=86400');
-          return res.end(Buffer.from(await response.arrayBuffer()));
+          return res.end(buffer);
         }
       }
     }
