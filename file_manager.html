@@ -44,6 +44,14 @@
             overflow: hidden;
         }
 
+        #appShell {
+            display: none;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
+            width: 100%;
+        }
+
         /* Top Header Navigation */
         header {
             background: var(--yellow);
@@ -415,9 +423,11 @@
         .login-card{background:#fff;border:var(--border-thick);border-radius:20px;padding:36px;width:100%;max-width:440px;box-shadow:var(--shadow);position:relative;}
         .login-header{text-align:center;margin-bottom:28px}.login-header h1{font-family:'Rubik',sans-serif;font-size:26px;font-weight:900;margin-bottom:8px}.title-badge{display:inline-block;background:var(--cyan);padding:2px 10px;border-radius:6px;border:2px solid var(--text-dark);box-shadow:2px 2px 0 var(--text-dark);font-size:20px}.login-header p{font-size:14px;color:#666;margin-top:8px;line-height:1.5}.login-wrap .form-group{margin-bottom:20px}.login-wrap label{display:block;font-size:12px;font-weight:700;margin-bottom:6px;text-transform:uppercase;font-family:'Rubik',sans-serif}.login-wrap input{width:100%;background:#FAFAFA;border:var(--border-thick);border-radius:12px;padding:13px 16px;font-size:14px;box-shadow:3px 3px 0 var(--text-dark)}.btn-login{width:100%;background:var(--pink);color:#fff;border:var(--border-thick);border-radius:12px;padding:14px;font-weight:800;font-size:15px;cursor:pointer;box-shadow:3px 3px 0 var(--text-dark)}.back-link{display:block;margin-top:22px;text-align:center;color:var(--text-dark);font-weight:700;text-decoration:none;font-size:13px}.login-error{background:#FFF0F0;border:2px solid #E53935;color:#B71C1C;border-radius:10px;padding:10px 12px;margin-bottom:18px;font-size:13px;font-weight:600;}
         .riwayat-box{margin-bottom:22px}.riwayat-title{font-size:12px;font-weight:700;text-transform:uppercase;font-family:'Rubik',sans-serif;margin-bottom:10px;color:#666}.riwayat-item{display:flex;align-items:stretch;gap:8px;margin-bottom:8px}.riwayat-open{flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:2px;background:#FAFAFA;border:var(--border-thick);border-radius:12px;padding:10px 14px;cursor:pointer;box-shadow:3px 3px 0 var(--text-dark);text-align:left;font-family:'Inter',sans-serif}.riwayat-open:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--text-dark)}.riwayat-name{font-weight:800;font-size:14px;word-break:break-all}.riwayat-date{font-size:11px;color:#888}.riwayat-hapus{width:44px;flex-shrink:0;background:#fff;border:var(--border-thick);border-radius:12px;cursor:pointer;box-shadow:3px 3px 0 var(--text-dark);font-size:16px}.riwayat-hapus:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--text-dark)}.riwayat-divider{display:flex;align-items:center;gap:10px;margin:22px 0;font-size:11px;color:#999;text-transform:uppercase;font-weight:700;font-family:'Rubik',sans-serif}.riwayat-divider::before,.riwayat-divider::after{content:'';flex:1;height:2px;background:#eee}
+        .modal-overlay{position:fixed;inset:0;background:rgba(26,26,46,.55);display:flex;align-items:center;justify-content:center;padding:20px;z-index:9999}.modal-box{background:#fff;border:var(--border-thick);border-radius:18px;box-shadow:var(--shadow);padding:26px;width:100%;max-width:380px;font-family:'Inter',sans-serif}.modal-message{font-size:14px;line-height:1.6;color:var(--text-dark);white-space:pre-wrap;word-break:break-word}.modal-input{width:100%;background:#FAFAFA;border:var(--border-thick);border-radius:12px;padding:11px 14px;font-size:14px;margin-top:14px}.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:22px}.modal-btn{border:var(--border-thick);border-radius:10px;padding:9px 18px;font-weight:800;font-size:13px;cursor:pointer;box-shadow:3px 3px 0 var(--text-dark);font-family:'Rubik',sans-serif}.modal-btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--text-dark)}.modal-btn-cancel{background:#fff;color:var(--text-dark)}.modal-btn-ok{background:var(--pink);color:#fff}
 </style>
 </head>
 <body>
+    <div id="appShell">
     <header>
         <div class="header-left">
             <h2>📂</h2>
@@ -480,6 +490,7 @@
             <p>Klik salah satu berkas di panel sebelah kiri untuk membuka editor kode secara langsung.</p>
         </div>
     </div>
+    </div>
 
     <script>
 
@@ -520,6 +531,37 @@
             catch (_) { return ''; }
         }
 
+        // --- Notifikasi kustom (pengganti confirm/alert/prompt bawaan browser) ---
+        function showAppModal(message, mode, defaultValue) {
+            return new Promise(resolve => {
+                const overlay = document.createElement('div');
+                overlay.className = 'modal-overlay';
+                overlay.innerHTML = `
+                    <div class="modal-box">
+                        <p class="modal-message"></p>
+                        ${mode === 'prompt' ? '<input type="text" class="modal-input">' : ''}
+                        <div class="modal-actions">
+                            ${mode !== 'alert' ? '<button type="button" class="modal-btn modal-btn-cancel">Batal</button>' : ''}
+                            <button type="button" class="modal-btn modal-btn-ok">Oke</button>
+                        </div>
+                    </div>`;
+                overlay.querySelector('.modal-message').textContent = message;
+                document.body.appendChild(overlay);
+                const input = overlay.querySelector('.modal-input');
+                if (input) { input.value = defaultValue || ''; input.focus(); input.select(); }
+                const finish = result => { overlay.remove(); resolve(result); };
+                overlay.querySelector('.modal-btn-ok').addEventListener('click', () => {
+                    finish(mode === 'prompt' ? input.value : true);
+                });
+                const cancelBtn = overlay.querySelector('.modal-btn-cancel');
+                if (cancelBtn) cancelBtn.addEventListener('click', () => finish(mode === 'prompt' ? null : false));
+                if (input) input.addEventListener('keydown', event => { if (event.key === 'Enter') overlay.querySelector('.modal-btn-ok').click(); });
+            });
+        }
+        const appAlert = message => showAppModal(message, 'alert');
+        const appConfirm = message => showAppModal(message, 'confirm');
+        const appPrompt = (message, defaultValue) => showAppModal(message, 'prompt', defaultValue);
+
         window.addEventListener('DOMContentLoaded', async () => {
             editor = ace.edit('codeEditorSection');
             ace.require('ace/ext/language_tools');
@@ -554,6 +596,7 @@
             if (data.authenticated) {
                 currentSiteId = data.siteId;
                 currentSiteUrl = data.siteUrl;
+                document.getElementById('appShell').style.display = 'flex';
                 await loadManager();
                 return;
             }
@@ -617,7 +660,7 @@
         }
 
         async function hapusRiwayat(siteId) {
-            const yakin = confirm(`Hapus "${siteId}" beserta seluruh berkasnya secara permanen? Website ini tidak akan bisa diakses lagi setelah dihapus.`);
+            const yakin = await appConfirm(`Hapus "${siteId}" beserta seluruh berkasnya secara permanen? Website ini tidak akan bisa diakses lagi setelah dihapus.`);
             if (!yakin) return;
             try {
                 const loginRes = await fetch('/manager/login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ site_id: siteId }) });
@@ -636,7 +679,7 @@
         async function loadTree() {
             const res = await fetch('/manager/api/tree');
             const data = await res.json();
-            if (data.error) { alert(data.error); return; }
+            if (data.error) { await appAlert(data.error); return; }
             renderTree(data.tree || []);
         }
 
@@ -695,7 +738,7 @@
             try {
                 const res = await fetch(`/manager/api/get-file?file=${encodeURIComponent(filePath)}`);
                 const data = await res.json();
-                if (data.error) return alert('Terjadi kesalahan: ' + data.error);
+                if (data.error) { await appAlert('Terjadi kesalahan: ' + data.error); return; }
                 document.getElementById('editorFilename').innerText = filePath;
                 const downloadUrl = `/manager/api/download-file?file=${encodeURIComponent(filePath)}`;
                 if (data.file_type === 'image') {
@@ -716,7 +759,7 @@
                     const modes={html:'ace/mode/html',htm:'ace/mode/html',css:'ace/mode/css',scss:'ace/mode/css',sass:'ace/mode/css',less:'ace/mode/css',js:'ace/mode/javascript',mjs:'ace/mode/javascript',cjs:'ace/mode/javascript',jsx:'ace/mode/javascript',ts:'ace/mode/typescript',tsx:'ace/mode/typescript',json:'ace/mode/json',xml:'ace/mode/xml',svg:'ace/mode/xml',md:'ace/mode/markdown',py:'ace/mode/python',sql:'ace/mode/sql',sh:'ace/mode/sh',bat:'ace/mode/sh',yaml:'ace/mode/yaml',yml:'ace/mode/yaml'};
                     editor.session.setMode(modes[ext] || 'ace/mode/text'); editor.setValue(data.content, -1);
                 }
-            } catch (_) { alert('Tidak dapat memuat berkas. Silakan coba lagi.'); }
+            } catch (_) { await appAlert('Tidak dapat memuat berkas. Silakan coba lagi.'); }
         }
 
         async function saveCurrentFile() {
@@ -724,26 +767,26 @@
             const saveBtn=document.querySelector('.save-btn'); saveBtn.disabled=true; saveBtn.innerText='⏳ Menyimpan...';
             try {
                 const res=await fetch('/manager/api/save-file',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file:selectedFilePath,content:editor.getValue()})});
-                const data=await res.json(); if(data.error) alert('Gagal menyimpan: '+data.error); else toastSuccess();
-            } catch(_){alert('Koneksi ke server terputus.');}
+                const data=await res.json(); if(data.error) await appAlert('Gagal menyimpan: '+data.error); else toastSuccess();
+            } catch(_){await appAlert('Koneksi ke server terputus.');}
             finally{saveBtn.disabled=false;saveBtn.innerHTML='💾 Simpan';}
         }
 
         function toastSuccess(){const el=document.getElementById('editorFilename');const old=el.innerText;el.innerText='✓ Berkas Berhasil Disimpan!';el.style.background='#E8F5E9';el.style.borderColor='#00C853';setTimeout(()=>{el.innerText=old;el.style.background='white';el.style.borderColor='#1a1a2e';},2000);}
 
         async function promptCreateFile(){
-            const name=prompt('Masukkan nama berkas baru (contoh: style.css atau sub/tentang.html):'); if(!name)return;
-            try{const res=await fetch('/manager/api/create-file',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:name})});const data=await res.json();if(data.error)alert('Gagal membuat berkas: '+data.error);else await loadTree();}catch(_){alert('Tidak dapat terhubung ke server.');}
+            const name=await appPrompt('Masukkan nama berkas baru (contoh: style.css atau sub/tentang.html):'); if(!name)return;
+            try{const res=await fetch('/manager/api/create-file',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:name})});const data=await res.json();if(data.error)await appAlert('Gagal membuat berkas: '+data.error);else await loadTree();}catch(_){await appAlert('Tidak dapat terhubung ke server.');}
         }
 
         async function handleUploadFiles(event){
             const files=Array.from(event.target.files||[]);event.target.value='';if(!files.length)return;
             let successCount=0;const failed=[];
-            for(const file of files){let overwrite=false;while(true){const fd=new FormData();fd.append('file',file);if(overwrite)fd.append('overwrite','1');try{const res=await fetch('/manager/api/upload-file',{method:'POST',body:fd});const data=await res.json();if(data.success){successCount++;break;}if(data.needs_confirm){if(!confirm(`Berkas "${data.filename}" sudah ada. Timpa dengan berkas baru?`)){failed.push(`${file.name} (dibatalkan)`);break;}overwrite=true;continue;}failed.push(`${file.name}: ${data.error}`);break;}catch(_){failed.push(`${file.name}: tidak dapat terhubung ke server`);break;}}}
-            if(failed.length)alert(`Selesai mengunggah.\n✅ Berhasil: ${successCount}\n❌ Gagal:\n${failed.join('\n')}`); if(successCount)await loadTree();
+            for(const file of files){let overwrite=false;while(true){const fd=new FormData();fd.append('file',file);if(overwrite)fd.append('overwrite','1');try{const res=await fetch('/manager/api/upload-file',{method:'POST',body:fd});const data=await res.json();if(data.success){successCount++;break;}if(data.needs_confirm){if(!await appConfirm(`Berkas "${data.filename}" sudah ada. Timpa dengan berkas baru?`)){failed.push(`${file.name} (dibatalkan)`);break;}overwrite=true;continue;}failed.push(`${file.name}: ${data.error}`);break;}catch(_){failed.push(`${file.name}: tidak dapat terhubung ke server`);break;}}}
+            if(failed.length)await appAlert(`Selesai mengunggah.\n✅ Berhasil: ${successCount}\n❌ Gagal:\n${failed.join('\n')}`); if(successCount)await loadTree();
         }
 
-        async function deleteFile(filePath,event){event.stopPropagation();if(!confirm(`Apakah Anda yakin ingin menghapus "${filePath}" secara permanen? Tindakan ini tidak dapat dibatalkan.`))return;try{const res=await fetch('/manager/api/delete-file',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file:filePath})});const data=await res.json();if(data.error)alert('Gagal menghapus: '+data.error);else{if(selectedFilePath===filePath){selectedFilePath='';document.getElementById('editorScreen').style.display='none';document.getElementById('binaryPreviewPanel').style.display='none';document.getElementById('noSelectedPlaceholder').style.display='flex';}await loadTree();}}catch(_){alert('Tidak dapat terhubung ke server.');}}
+        async function deleteFile(filePath,event){event.stopPropagation();if(!await appConfirm(`Apakah Anda yakin ingin menghapus "${filePath}" secara permanen? Tindakan ini tidak dapat dibatalkan.`))return;try{const res=await fetch('/manager/api/delete-file',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file:filePath})});const data=await res.json();if(data.error)await appAlert('Gagal menghapus: '+data.error);else{if(selectedFilePath===filePath){selectedFilePath='';document.getElementById('editorScreen').style.display='none';document.getElementById('binaryPreviewPanel').style.display='none';document.getElementById('noSelectedPlaceholder').style.display='flex';}await loadTree();}}catch(_){await appAlert('Tidak dapat terhubung ke server.');}}
         </script>
 </body>
 </html>
