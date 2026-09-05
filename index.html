@@ -30,6 +30,11 @@
             --prefix-color: #888;
         }
 
+        html {
+            overflow-x: hidden;
+            width: 100%;
+        }
+
         html.dark {
             --bg: #1a1a2e;
             --card-bg: #2a2a3e;
@@ -252,7 +257,40 @@
             align-items: center;
         }
 
-        input[type="text"], input[type="password"], select {
+        .slug-preview {
+            display: none;
+            align-items: center;
+            gap: 9px;
+            margin-top: 10px;
+            padding: 10px 14px;
+            background: var(--input-bg);
+            border: var(--border-thick);
+            border-radius: 10px;
+            box-shadow: 3px 3px 0px var(--text-dark);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            word-break: break-all;
+        }
+
+        .slug-preview.active {
+            display: flex;
+        }
+
+        .slug-preview .live-dot {
+            width: 8px;
+            height: 8px;
+            min-width: 8px;
+            border-radius: 50%;
+            background: var(--lime);
+            border: 1.5px solid var(--text-dark);
+        }
+
+        .slug-preview .slug-highlight {
+            color: var(--pink);
+            font-weight: 700;
+        }
+
+        input[type="text"], select {
             width: 100%;
             background-color: var(--input-bg);
             border: var(--border-thick);
@@ -458,10 +496,16 @@
             font-size: 13px;
             color: var(--blue);
             display: flex;
+            flex-wrap: wrap;
             justify-content: space-between;
             align-items: center;
+            gap: 8px;
             margin-bottom: 20px;
             box-shadow: 3px 3px 0px var(--text-dark);
+        }
+
+        .deploy-url span {
+            word-break: break-all;
         }
 
         .deploy-url a {
@@ -584,6 +628,41 @@
             flex-shrink: 0;
         }
 
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .manage-toggle {
+            background: var(--cyan);
+            border: var(--border-thick);
+            border-radius: 50%;
+            width: 38px;
+            height: 38px;
+            padding: 0;
+            cursor: pointer;
+            font-size: 16px;
+            box-shadow: 3px 3px 0px var(--text-dark);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-dark);
+            flex-shrink: 0;
+            text-decoration: none;
+        }
+
+        .manage-toggle:hover {
+            transform: translate(-1px, -1px);
+            box-shadow: 4px 4px 0px var(--text-dark);
+        }
+
+        .manage-toggle:active {
+            transform: translate(2px, 2px);
+            box-shadow: 1px 1px 0px var(--text-dark);
+        }
+
         html.dark .dark-toggle {
             background: #2a2a3e;
             color: #e8e8f0;
@@ -640,9 +719,12 @@
             <a href="#" class="brand">
                 <img src="https://www.gobox.my.id/file/IcHjU.png" alt="HidzHost" style="width: 28px; height: 28px; vertical-align: middle; border-radius: 50%; border: 2px solid var(--text-dark); box-shadow: 2px 2px 0px var(--text-dark);"> <span class="accent">HIDZ HOST</span>
             </a>
-            <button class="dark-toggle" id="darkToggle" onclick="toggleDarkMode()">
-                <span id="darkIcon">🌙</span>
-            </button>
+            <div class="header-actions">
+                <a href="/file-manager" class="manage-toggle" title="Kelola Berkas">📂</a>
+                <button class="dark-toggle" id="darkToggle" onclick="toggleDarkMode()">
+                    <span id="darkIcon">🌙</span>
+                </button>
+            </div>
         </div>
     </header>
 
@@ -653,7 +735,7 @@
                 <span class="highlight-cyan">Deploy</span><br>
                 Website Instan
             </h1>
-            <p>Wujudkan website impianmu dalam hitungan detik! Cukup pilih nama unik, atur kata sandi, dan langsung tayangkan ke internet.</p>
+            <p>Wujudkan website impianmu dalam hitungan detik! Cukup pilih nama unik, dan langsung tayangkan ke internet.</p>
             <div class="badge-row">
                 <span class="badge badge-pink">⚡ Super Cepat</span>
                 <span class="badge badge-cyan">🔒 Aman & Terlindungi</span>
@@ -677,18 +759,10 @@
                             pattern="[a-z0-9][a-z0-9-]{0,61}[a-z0-9]"
                         >
                     </div>
-                    <small style="display:block; margin-top:7px; font-size:12px; opacity:.75;">Gunakan huruf kecil, angka, dan tanda hubung (-). Slug ini menjadi bagian dari URL: <strong>h.&lt;slug&gt;.hidzproject.my.id</strong></small>
-                </div>
-
-                <div class="form-group">
-                    <label for="password">✦ Kata Sandi Keamanan</label>
-                    <input
-                        type="password"
-                        id="password"
-                        name="password"
-                        placeholder="Masukan Sandi Pelindung Anda"
-                        required
-                    >
+                    <div class="slug-preview" id="slugPreview">
+                        <span class="live-dot"></span>
+                        <span>https://<span class="slug-highlight" id="slugPreviewText"></span>.h.hidzproject.my.id</span>
+                    </div>
                 </div>
 
                 <div class="tab-menu">
@@ -753,6 +827,29 @@
         const HOST_PREFIX = "h";
         const BASE_DOMAIN = "hidzproject.my.id";
         const HOST_BASE_URL = `https://${HOST_PREFIX}.${BASE_DOMAIN}`;
+
+        // --- Riwayat website yang pernah dibuat di perangkat ini ---
+        const RIWAYAT_KEY = 'hidzhost_riwayat';
+        const RIWAYAT_MAX = 20;
+
+        function getRiwayat() {
+            try {
+                const raw = JSON.parse(localStorage.getItem(RIWAYAT_KEY) || '[]');
+                return Array.isArray(raw) ? raw : [];
+            } catch (_) {
+                return [];
+            }
+        }
+
+        function saveRiwayat(list) {
+            try { localStorage.setItem(RIWAYAT_KEY, JSON.stringify(list.slice(0, RIWAYAT_MAX))); } catch (_) {}
+        }
+
+        function catatRiwayat(siteId, siteUrl) {
+            const list = getRiwayat().filter(item => item.siteId !== siteId);
+            list.unshift({ siteId, siteUrl, createdAt: new Date().toISOString() });
+            saveRiwayat(list);
+        }
 
         let currentActiveTab = 'zip';
 
@@ -858,11 +955,24 @@
         }
 
         const siteInput = document.getElementById('siteId');
+        const slugPreview = document.getElementById('slugPreview');
+        const slugPreviewText = document.getElementById('slugPreviewText');
+
+        function updateSlugPreview(value) {
+            if (value) {
+                slugPreviewText.textContent = value;
+                slugPreview.classList.add('active');
+            } else {
+                slugPreview.classList.remove('active');
+            }
+        }
+
         siteInput.addEventListener('input', function() {
             const cursor = this.selectionStart;
             const cleaned = slugify(this.value);
             this.value = cleaned;
             try { this.setSelectionRange(Math.min(cursor, cleaned.length), Math.min(cursor, cleaned.length)); } catch (_) {}
+            updateSlugPreview(cleaned);
         });
 
         document.getElementById('hostingForm').addEventListener('submit', async function(e) {
@@ -877,7 +987,6 @@
             submitBtn.innerText = '⏳ Memproses permintaan Anda...';
 
             const siteIdValue = slugify(document.getElementById('siteId').value.trim());
-            const passwordValue = document.getElementById('password').value;
 
             if (!siteIdValue) {
                 showError('Silakan tentukan Custom Slug terlebih dahulu.');
@@ -898,7 +1007,6 @@
 
                     const formData = new FormData();
                     formData.append('siteId', siteIdValue);
-                    formData.append('password', passwordValue);
 
                     files.forEach(file => {
                         formData.append('files', file, file.name);
@@ -912,7 +1020,6 @@
                     if (endpoint === '/api/zip-deploy') {
                         const zipData = new FormData();
                         zipData.append('siteId', siteIdValue);
-                        zipData.append('password', passwordValue);
                         zipData.append('zipfile', files[0], files[0].name);
                         formData.delete('files');
                         formData.delete('paths');
@@ -943,7 +1050,6 @@
 
                     const payload = {
                         siteId: siteIdValue,
-                        password: passwordValue,
                         files: [
                             {
                                 path: 'index.html',
@@ -996,6 +1102,7 @@
             createdSiteUrl.innerHTML = `<a href="${fullSiteUrl}" target="_blank">${fullSiteUrl}</a>`;
             visitSiteBtn.href = fullSiteUrl;
             manageSiteBtn.href = fullManagerUrl;
+            catatRiwayat(data.siteId, fullSiteUrl);
 
             resultPanel.style.display = 'block';
             resultPanel.scrollIntoView({ behavior: 'smooth' });

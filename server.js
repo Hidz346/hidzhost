@@ -5,6 +5,8 @@ const multer = require('multer');
 const AdmZip = require('adm-zip');
 const cookieSession = require('cookie-session');
 const { put, list, del } = require('@vercel/blob');
+const mammoth = require('mammoth');
+const XLSX = require('xlsx');
 require('dotenv').config();
 
 const app = express();
@@ -137,15 +139,12 @@ async function readMetadata(slug) {
   }
 }
 
-async function writeMetadata(slug, password) {
+async function writeMetadata(slug) {
   const existing = await readMetadata(slug);
-  const salt = crypto.randomBytes(16);
-  const digest = crypto.scryptSync(String(password), salt, 64).toString('hex');
   const payload = {
     siteId: slug,
     created_at: existing?.created_at || new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    password_hash: `scrypt$${salt.toString('hex')}$${digest}`
+    updated_at: new Date().toISOString()
   };
   await put(metadataKey(slug), JSON.stringify(payload), {
     access: 'public',
@@ -157,41 +156,29 @@ async function writeMetadata(slug, password) {
   });
 }
 
-function verifyHash(password, stored) {
-  if (!stored) return false;
-  if (stored.startsWith('scrypt$')) {
-    const [, salt, digest] = stored.split('$');
-    try {
-      const derived = crypto.scryptSync(String(password), Buffer.from(salt, 'hex'), 64).toString('hex');
-      return crypto.timingSafeEqual(Buffer.from(derived), Buffer.from(digest));
-    } catch (_) {
-      return false;
-    }
-  }
-  if (/^[a-f0-9]{64}$/i.test(stored)) {
-    return crypto.timingSafeEqual(
-      Buffer.from(crypto.createHash('sha256').update(String(password)).digest('hex')),
-      Buffer.from(stored)
-    );
-  }
-  return false;
-}
-
-async function verifyPassword(slug, password) {
-  const meta = await readMetadata(slug);
-  return !!meta && verifyHash(password, meta.password_hash);
-}
-
 async function siteExists(slug) {
   return !!(await findBlob(metadataKey(slug)));
 }
 
-async function ensureSite(slug, password) {
+async function ensureSite(slug) {
   if (await siteExists(slug)) {
     return { ok: false, error: 'Slug "' + slug + '" sudah digunakan. Silakan pilih Custom Slug lain.' };
   }
-  await writeMetadata(slug, password);
+  await writeMetadata(slug);
   return { ok: true };
+}
+
+async function deleteSiteEntirely(slug) {
+  const prefix = `sites/${slug}/`;
+  const urls = [];
+  let cursor;
+  do {
+    const result = await list({ prefix, cursor, limit: 1000, ...blobAuthOptions() });
+    urls.push(...result.blobs.map((blob) => blob.url));
+    cursor = result.hasMore ? result.cursor : undefined;
+  } while (cursor);
+  if (urls.length) await del(urls, blobAuthOptions());
+  return urls.length;
 }
 
 async function makeUniqueSlug(preferred) {
@@ -232,6 +219,76 @@ function fileType(filePath) {
   if (video.has(ext)) return 'video';
   if (text.has(ext)) return 'text';
   return 'binary';
+}
+
+// Ekstensi ini tetap dianggap "aset website" walau bukan html — browser/halaman
+// lain mungkin benar-benar fetch/pakai isinya apa adanya, jadi jangan dibungkus
+// jadi halaman kode.
+const WEB_ASSET_EXTS = new Set(['html', 'htm', 'css', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'scss', 'sass', 'less', 'vue', 'json', 'xml', 'svg']);
+
+// File teks/kode yang tidak mungkin jalan sebagai website statis (mis. .php, .py,
+// .sql, dll) — ini yang perlu ditampilkan sebagai halaman kode + salin/download,
+// bukan diunduh mentah sebagai octet-stream atau 404.
+function isCodeViewOnly(filePath) {
+  return fileType(filePath) === 'text' && !WEB_ASSET_EXTS.has(path.extname(filePath).slice(1).toLowerCase());
+}
+
+// File Office yang bisa dikonversi jadi preview isi dokumen (bukan kode mentah).
+// .doc/.ppt/.xls lama (format biner pra-2007) sengaja tidak didukung — cuma format
+// modern berbasis XML/zip (docx, xlsx, xls modern, pptx) yang aman diparse tanpa
+// library berat tambahan.
+function documentPreviewKind(filePath) {
+  const ext = path.extname(filePath).slice(1).toLowerCase();
+  if (ext === 'docx') return 'docx';
+  if (ext === 'xlsx' || ext === 'xls') return 'xlsx';
+  if (ext === 'pptx') return 'pptx';
+  return null;
+}
+
+function decodeXmlEntities(str) {
+  return String(str).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+}
+
+async function docxToPreview(buffer) {
+  const imageOptions = {
+    convertImage: mammoth.images.imgElement((image) =>
+      image.read('base64').then((data) => ({ src: `data:${image.contentType};base64,${data}` }))
+    )
+  };
+  const [htmlResult, textResult] = await Promise.all([
+    mammoth.convertToHtml({ buffer }, imageOptions),
+    mammoth.extractRawText({ buffer })
+  ]);
+  return { html: htmlResult.value, text: textResult.value };
+}
+
+function xlsxToPreview(buffer) {
+  const wb = XLSX.read(buffer, { type: 'buffer' });
+  let html = '';
+  let text = '';
+  wb.SheetNames.forEach((name) => {
+    const sheet = wb.Sheets[name];
+    html += `<h3 class="sheet-name">${escapeHtml(name)}</h3>` + XLSX.utils.sheet_to_html(sheet, { header: '', footer: '' });
+    text += `# ${name}\n` + XLSX.utils.sheet_to_csv(sheet) + '\n\n';
+  });
+  return { html, text };
+}
+
+function pptxToPreview(buffer) {
+  const zip = new AdmZip(buffer);
+  const entries = zip.getEntries()
+    .filter((e) => /^ppt\/slides\/slide\d+\.xml$/.test(e.entryName))
+    .sort((a, b) => Number(a.entryName.match(/slide(\d+)\.xml/)[1]) - Number(b.entryName.match(/slide(\d+)\.xml/)[1]));
+  let html = '';
+  let text = '';
+  entries.forEach((entry, idx) => {
+    const xml = entry.getData().toString('utf8');
+    const lines = [...xml.matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((m) => decodeXmlEntities(m[1]));
+    const slideNo = idx + 1;
+    html += `<div class="slide"><div class="slide-num">Slide ${slideNo}</div><p>${lines.map(escapeHtml).join('<br>') || '<em>(kosong)</em>'}</p></div>`;
+    text += `--- Slide ${slideNo} ---\n${lines.join('\n')}\n\n`;
+  });
+  return { html: html || '<p><em>Tidak ada teks yang bisa dibaca dari slide.</em></p>', text };
 }
 
 function iconFor(name) {
@@ -350,11 +407,11 @@ function formatBytes(bytes) {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function renderCodeViewerPage({ filename, code, size, icon, downloadHref, listHref }) {
+function renderCodeViewerPage({ filename, code, size, icon, downloadHref }) {
   const safeName = escapeHtml(filename);
+  const safeCode = escapeHtml(code);
   const safeCodeJson = JSON.stringify(code);
   const lineCount = code.split('\n').length;
-  const backBtn = listHref ? `<a class="btn back" href="${listHref}">🗂️ Semua Berkas</a>` : '';
   return `<!DOCTYPE html>
 <html lang="id">
 <head>
@@ -395,80 +452,139 @@ function renderCodeViewerPage({ filename, code, size, icon, downloadHref, listHr
     <span class="meta">${formatBytes(size)} · ${lineCount} baris</span>
   </div>
   <div class="actions">
-    ${backBtn}
     <button class="btn copy" id="copyBtn" onclick="copyCode()">📋 Salin Kode</button>
     <a class="btn dl" href="${downloadHref}" download="${safeName}">⬇️ Download</a>
   </div>
-  <pre><code id="codeBlock"></code></pre>
+  <pre><code id="codeBlock">${safeCode}</code></pre>
   <footer>Disajikan oleh HidzHost — berkas ini tidak bisa dijalankan sebagai website, jadi ditampilkan sebagai kode.</footer>
   <script id="code-data" type="application/json">${safeCodeJson}</script>
   <script>
-    const codeText = JSON.parse(document.getElementById('code-data').textContent);
-    document.getElementById('codeBlock').textContent = codeText;
+    function selectCodeBlock() {
+      const el = document.getElementById('codeBlock');
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+    function fallbackCopy(text) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      return ok;
+    }
     function copyCode() {
-      navigator.clipboard.writeText(codeText).then(() => {
-        const btn = document.getElementById('copyBtn');
-        const original = btn.innerHTML;
-        btn.innerHTML = '✅ Tersalin!';
-        setTimeout(() => { btn.innerHTML = original; }, 1500);
-      });
+      const codeText = JSON.parse(document.getElementById('code-data').textContent);
+      const btn = document.getElementById('copyBtn');
+      const original = btn.innerHTML;
+      const showSuccess = () => { btn.innerHTML = '✅ Tersalin!'; setTimeout(() => { btn.innerHTML = original; }, 1500); };
+      const showFail = () => { btn.innerHTML = '⚠️ Gagal, teks dipilih — salin manual'; setTimeout(() => { btn.innerHTML = original; }, 2500); selectCodeBlock(); };
+      if (window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(codeText).then(showSuccess).catch(() => {
+          fallbackCopy(codeText) ? showSuccess() : showFail();
+        });
+      } else {
+        fallbackCopy(codeText) ? showSuccess() : showFail();
+      }
     }
   </script>
 </body>
 </html>`;
 }
 
-function renderFileListPage({ siteId, files }) {
-  const items = files
-    .map(blob => ({ rel: blob.pathname.replace(/^sites\/[^/]+\//, ''), size: blob.size || 0 }))
-    .filter(item => item.rel)
-    .sort((a, b) => a.rel.localeCompare(b.rel));
-  const rowsHtml = items.map(item => {
-    const href = `/${item.rel.split('/').map(encodeURIComponent).join('/')}`;
-    return `<a class="row" href="${href}">
-      <span class="ic">${iconFor(item.rel)}</span>
-      <span class="fn">${escapeHtml(item.rel)}</span>
-      <span class="sz">${formatBytes(item.size)}</span>
-    </a>`;
-  }).join('\n');
-  const safeSiteId = escapeHtml(siteId);
+function renderDocumentPreviewPage({ filename, size, icon, downloadHref, bodyHtml, plainText, kind }) {
+  const safeName = escapeHtml(filename);
+  const safeTextJson = JSON.stringify(plainText || '');
+  const kindLabel = { docx: 'Dokumen Word', xlsx: 'Spreadsheet Excel', pptx: 'Presentasi PowerPoint' }[kind] || 'Dokumen';
   return `<!DOCTYPE html>
 <html lang="id">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${safeSiteId} — HidzHost</title>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<title>${safeName} — HidzHost</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #FFF5F9; --card-bg: #FFFFFF; --text-dark: #1a1a2e;
-    --yellow: #FFE600; --border: 3px solid #1a1a2e; --shadow: 6px 6px 0px #1a1a2e; --radius: 14px;
+    --yellow: #FFE600; --lime: #BFFF00; --pink: #FF2D78;
+    --border: 3px solid #1a1a2e; --shadow: 6px 6px 0px #1a1a2e; --radius: 14px;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text-dark); font-family: 'Space Grotesk', sans-serif; padding: 16px; }
+  body { margin: 0; background: var(--bg); color: var(--text-dark); font-family: 'Inter', sans-serif; padding: 16px; }
   .bar { background: var(--yellow); border: var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
-         padding: 14px 18px; margin-bottom: 18px; }
-  .bar h1 { margin: 0; font-size: 18px; word-break: break-all; }
-  .bar p { margin: 6px 0 0; font-size: 12px; opacity: 0.75; font-family: 'JetBrains Mono', monospace; }
-  .list { display: flex; flex-direction: column; gap: 10px; }
-  .row { display: flex; align-items: center; gap: 10px; background: var(--card-bg); border: var(--border);
-         border-radius: 10px; box-shadow: 4px 4px 0px #1a1a2e; padding: 12px 14px; text-decoration: none;
-         color: var(--text-dark); font-family: 'JetBrains Mono', monospace; font-size: 13px; transition: transform 0.1s; }
-  .row:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0px #1a1a2e; }
-  .fn { flex: 1; word-break: break-all; }
-  .sz { opacity: 0.6; font-size: 11px; white-space: nowrap; }
+         padding: 14px 18px; margin-bottom: 18px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .bar .name { font-family: 'Space Grotesk', sans-serif; font-weight: 800; font-size: 16px; word-break: break-all; }
+  .bar .meta { font-size: 12px; opacity: 0.75; margin-left: auto; }
+  .actions { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+  .btn { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 14px; cursor: pointer;
+         border: var(--border); border-radius: 10px; box-shadow: 4px 4px 0px #1a1a2e; padding: 10px 18px;
+         background: var(--card-bg); color: var(--text-dark); text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+         transition: transform 0.1s; }
+  .btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0px #1a1a2e; }
+  .btn.copy { background: var(--lime); }
+  .btn.dl { background: var(--pink); color: #fff; }
+  .doc { background: var(--card-bg); border: var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
+         padding: 24px; overflow-x: auto; max-width: 100%; line-height: 1.6; }
+  .doc img { max-width: 100%; height: auto; }
+  .doc table { border-collapse: collapse; margin: 10px 0; }
+  .doc table td, .doc table th { border: 1px solid #ccc; padding: 6px 10px; font-size: 13px; }
+  .doc .sheet-name { font-family: 'Space Grotesk', sans-serif; margin-top: 20px; }
+  .doc .slide { border-bottom: 2px dashed #ddd; padding: 14px 0; }
+  .doc .slide-num { font-family: 'Space Grotesk', sans-serif; font-weight: 700; color: var(--pink); margin-bottom: 6px; }
+  .notice { font-size: 12px; opacity: 0.6; margin-bottom: 14px; }
   footer { text-align: center; font-size: 11px; opacity: 0.5; margin-top: 20px; font-family: 'Space Grotesk', sans-serif; }
 </style>
 </head>
 <body>
   <div class="bar">
-    <h1>📁 ${safeSiteId}</h1>
-    <p>Bukan berupa website — ${items.length} berkas tersedia. Ketuk untuk lihat kode & download.</p>
+    <span>${icon}</span>
+    <span class="name">${safeName}</span>
+    <span class="meta">${formatBytes(size)}</span>
   </div>
-  <div class="list">
-    ${rowsHtml || '<p>Tidak ada berkas.</p>'}
+  <div class="actions">
+    <button class="btn copy" id="copyBtn" onclick="copyText()">📋 Salin Teks</button>
+    <a class="btn dl" href="${downloadHref}" download="${safeName}">⬇️ Download ${kindLabel}</a>
   </div>
-  <footer>Disajikan oleh HidzHost</footer>
+  <p class="notice">Preview isi ${kindLabel.toLowerCase()} — beberapa format asli (font, tata letak persis) mungkin tidak identik dengan aplikasi aslinya.</p>
+  <div class="doc">${bodyHtml}</div>
+  <footer>Disajikan oleh HidzHost — berkas ini tidak bisa dijalankan sebagai website, jadi ditampilkan sebagai preview dokumen.</footer>
+  <script id="text-data" type="application/json">${safeTextJson}</script>
+  <script>
+    function fallbackCopy(text) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      return ok;
+    }
+    function copyText() {
+      const text = JSON.parse(document.getElementById('text-data').textContent);
+      const btn = document.getElementById('copyBtn');
+      const original = btn.innerHTML;
+      const showSuccess = () => { btn.innerHTML = '✅ Tersalin!'; setTimeout(() => { btn.innerHTML = original; }, 1500); };
+      const showFail = () => { btn.innerHTML = '⚠️ Gagal menyalin'; setTimeout(() => { btn.innerHTML = original; }, 2000); };
+      if (window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(showSuccess).catch(() => {
+          fallbackCopy(text) ? showSuccess() : showFail();
+        });
+      } else {
+        fallbackCopy(text) ? showSuccess() : showFail();
+      }
+    }
+  </script>
 </body>
 </html>`;
 }
@@ -484,12 +600,11 @@ async function requireManagerAuth(req, res, next) {
 
 app.post('/api/deploy', async (req, res) => {
   try {
-    const { siteId, password, files } = req.body || {};
+    const { siteId, files } = req.body || {};
     const slug = normalizeSlug(siteId);
     if (!slug || !validateSlug(slug)) return sendJson(res, 400, { error: 'Nama website tidak valid.' });
-    if (!password || String(password).length < 4) return sendJson(res, 400, { error: 'Kata sandi minimal 4 karakter.' });
     if (!Array.isArray(files) || !files.length) return sendJson(res, 400, { error: 'Tidak ada berkas untuk ditayangkan.' });
-    const result = await ensureSite(slug, password);
+    const result = await ensureSite(slug);
     if (!result.ok) return sendJson(res, 409, { error: result.error });
     let written = 0;
     for (const file of files) {
@@ -510,11 +625,9 @@ app.post('/api/deploy', async (req, res) => {
 app.post('/api/file-deploy', upload.array('files'), async (req, res) => {
   try {
     const slug = normalizeSlug(req.body.siteId);
-    const password = String(req.body.password || '');
     if (!slug || !validateSlug(slug)) return sendJson(res, 400, { error: 'Nama website tidak valid.' });
-    if (password.length < 4) return sendJson(res, 400, { error: 'Kata sandi minimal 4 karakter.' });
     if (!req.files?.length) return sendJson(res, 400, { error: 'Tidak ada berkas yang dipilih.' });
-    const result = await ensureSite(slug, password);
+    const result = await ensureSite(slug);
     if (!result.ok) return sendJson(res, 409, { error: result.error });
     const paths = Array.isArray(req.body.paths) ? req.body.paths : (req.body.paths ? [req.body.paths] : []);
     let uploaded = 0;
@@ -535,11 +648,9 @@ app.post('/api/file-deploy', upload.array('files'), async (req, res) => {
 app.post('/api/zip-deploy', upload.single('zipfile'), async (req, res) => {
   try {
     const slug = normalizeSlug(req.body.siteId);
-    const password = String(req.body.password || '');
     if (!slug || !validateSlug(slug)) return sendJson(res, 400, { error: 'Nama website tidak valid.' });
-    if (password.length < 4) return sendJson(res, 400, { error: 'Kata sandi minimal 4 karakter.' });
     if (!req.file) return sendJson(res, 400, { error: 'Berkas ZIP tidak ditemukan.' });
-    const result = await ensureSite(slug, password);
+    const result = await ensureSite(slug);
     if (!result.ok) return sendJson(res, 409, { error: result.error });
     const count = await extractZipBuffer(req.file.buffer, slug);
     return res.json({ success: true, siteId: slug, files_extracted: count, url: siteUrl(slug), managerUrl: managerUrl(slug) });
@@ -551,15 +662,25 @@ app.post('/api/zip-deploy', upload.single('zipfile'), async (req, res) => {
 
 app.post('/manager/login', async (req, res) => {
   const slug = normalizeSlug(req.body.site_id);
-  const password = String(req.body.password || '');
-  if (!slug || !password) return sendJson(res, 400, { error: 'Nama website dan kata sandi wajib diisi.' });
+  if (!slug) return sendJson(res, 400, { error: 'Nama website wajib diisi.' });
   if (!(await siteExists(slug))) return sendJson(res, 404, { error: 'Website tidak ditemukan.' });
-  if (!(await verifyPassword(slug, password))) return sendJson(res, 401, { error: 'Kata sandi tidak sesuai.' });
   req.session.siteId = slug;
   return res.json({ success: true, siteId: slug });
 });
 
 app.post('/manager/logout', (req, res) => { req.session = null; res.json({ success: true }); });
+
+app.post('/manager/api/delete-site', requireManagerAuth, async (req, res) => {
+  try {
+    const slug = req.siteId;
+    const filesDeleted = await deleteSiteEntirely(slug);
+    req.session = null;
+    return res.json({ success: true, siteId: slug, files_deleted: filesDeleted });
+  } catch (error) {
+    console.error(error);
+    return sendJson(res, 500, { error: 'Gagal menghapus website.' });
+  }
+});
 
 app.get('/manager/session', async (req, res) => {
   const slug = req.session?.siteId;
@@ -660,23 +781,15 @@ app.use(async (req, res, next) => {
     if (!relative) relative = 'index.html';
     const clean = safeRelativePath(relative);
     if (!clean) return res.status(400).send('Path tidak valid.');
-
-    const files = await listSiteFiles(slug);
-    // Situs dianggap "beneran website" hanya kalau ada minimal 1 berkas HTML di dalamnya.
-    // Kalau tidak ada HTML sama sekali, berkas apa pun di situs ini tidak mungkin jadi
-    // halaman web, jadi selalu ditampilkan sebagai kode + tombol download (bukan mentah).
-    const hasHtml = files.some(f => /\.html?$/i.test(f.pathname));
-    const wantsRaw = req.query.raw === '1';
-    const blob = files.find(f => f.pathname === blobKey(slug, clean)) || null;
-
-    if (blob) {
-      const ext = path.extname(clean).slice(1).toLowerCase();
-      const isHtmlFile = ext === 'html' || ext === 'htm';
-      const showAsCode = !isHtmlFile && !hasHtml && !wantsRaw && fileType(clean) === 'text' && (blob.size || 0) <= 2 * 1024 * 1024;
-      if (showAsCode) {
-        const response = await fetch(blob.url);
-        if (!response.ok) return res.status(404).send('Berkas tidak ditemukan.');
-        const buffer = Buffer.from(await response.arrayBuffer());
+    const blob = await findBlob(blobKey(slug, clean));
+    if (blob && blob.pathname === blobKey(slug, clean)) {
+      const response = await fetch(blob.url);
+      if (!response.ok) return res.status(404).send('Berkas tidak ditemukan.');
+      const buffer = Buffer.from(await response.arrayBuffer());
+      const wantsRaw = req.query.raw !== undefined;
+      if (!wantsRaw && isCodeViewOnly(clean) && buffer.length <= 2 * 1024 * 1024) {
+        // Berkas tidak bisa jadi website (mis. .php/.py/.sql/dll): tampilkan sebagai
+        // halaman kode dengan tombol salin & download, bukan diunduh mentah.
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-cache');
         return res.send(renderCodeViewerPage({
@@ -684,23 +797,41 @@ app.use(async (req, res, next) => {
           code: buffer.toString('utf8'),
           size: blob.size,
           icon: iconFor(clean),
-          downloadHref: `/${clean.split('/').map(encodeURIComponent).join('/')}?raw=1`,
-          listHref: files.length > 1 ? '/' : null
+          downloadHref: `/${clean.split('/').map(encodeURIComponent).join('/')}?raw=1`
         }));
       }
-      const response = await fetch(blob.url);
-      if (!response.ok) return res.status(404).send('Berkas tidak ditemukan.');
+      const docKind = !wantsRaw ? documentPreviewKind(clean) : null;
+      if (docKind && buffer.length <= 8 * 1024 * 1024) {
+        try {
+          const preview = docKind === 'docx' ? await docxToPreview(buffer)
+            : docKind === 'xlsx' ? xlsxToPreview(buffer)
+            : pptxToPreview(buffer);
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
+          res.setHeader('Cache-Control', 'no-cache');
+          return res.send(renderDocumentPreviewPage({
+            filename: clean,
+            size: blob.size,
+            icon: iconFor(clean),
+            downloadHref: `/${clean.split('/').map(encodeURIComponent).join('/')}?raw=1`,
+            bodyHtml: preview.html,
+            plainText: preview.text,
+            kind: docKind
+          }));
+        } catch (e) {
+          // Gagal diparse (berkas korup / format lama menyamar sebagai .docx-.xlsx-.pptx):
+          // jatuh ke unduh mentah di bawah, jangan sampai halaman error.
+        }
+      }
       res.setHeader('Content-Type', blob.contentType || getMime(clean));
-      if (wantsRaw && !isHtmlFile) {
+      if (wantsRaw && (isCodeViewOnly(clean) || documentPreviewKind(clean))) {
         res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(clean))}`);
       }
       res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=31536000, stale-while-revalidate=86400');
-      return res.end(Buffer.from(await response.arrayBuffer()));
+      return res.end(buffer);
     }
-
     if (!path.extname(clean)) {
-      const indexBlob = files.find(f => f.pathname === blobKey(slug, 'index.html'));
-      if (indexBlob) {
+      const indexBlob = await findBlob(blobKey(slug, 'index.html'));
+      if (indexBlob && indexBlob.pathname === blobKey(slug, 'index.html')) {
         const response = await fetch(indexBlob.url);
         if (response.ok) {
           res.setHeader('Content-Type', indexBlob.contentType || 'text/html; charset=utf-8');
@@ -709,9 +840,9 @@ app.use(async (req, res, next) => {
         }
       }
     }
-
     if (req.path === '/') {
       // Situs tanpa index.html (mis. hasil upload 1 file tunggal: foto/video/docx/kode/dll).
+      const files = await listSiteFiles(slug);
       if (files.length === 1) {
         const only = files[0];
         const relPath = only.pathname.slice(blobKey(slug, '').length);
@@ -725,7 +856,7 @@ app.use(async (req, res, next) => {
             res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=31536000, stale-while-revalidate=86400');
             return res.end(buffer);
           }
-          if (fileType(relPath) === 'text' && buffer.length <= 2 * 1024 * 1024) {
+          if (isCodeViewOnly(relPath) && buffer.length <= 2 * 1024 * 1024) {
             // Berkas kode/teks yang tidak bisa jadi website: tampilkan sebagai kode + tombol salin/download.
             res.setHeader('Content-Type', 'text/html; charset=utf-8');
             res.setHeader('Cache-Control', 'no-cache');
@@ -737,18 +868,34 @@ app.use(async (req, res, next) => {
               downloadHref: `/${relPath.split('/').map(encodeURIComponent).join('/')}?raw=1`
             }));
           }
+          const rootDocKind = documentPreviewKind(relPath);
+          if (rootDocKind && buffer.length <= 8 * 1024 * 1024) {
+            try {
+              const preview = rootDocKind === 'docx' ? await docxToPreview(buffer)
+                : rootDocKind === 'xlsx' ? xlsxToPreview(buffer)
+                : pptxToPreview(buffer);
+              res.setHeader('Content-Type', 'text/html; charset=utf-8');
+              res.setHeader('Cache-Control', 'no-cache');
+              return res.send(renderDocumentPreviewPage({
+                filename: relPath,
+                size: only.size,
+                icon: iconFor(relPath),
+                downloadHref: `/${relPath.split('/').map(encodeURIComponent).join('/')}?raw=1`,
+                bodyHtml: preview.html,
+                plainText: preview.text,
+                kind: rootDocKind
+              }));
+            } catch (e) {
+              // Gagal diparse: jatuh ke unduh mentah di bawah.
+            }
+          }
           // Gambar/video/audio/dokumen/binary lain: sajikan langsung apa adanya.
           res.setHeader('Content-Type', only.contentType || getMime(relPath));
           res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=31536000, stale-while-revalidate=86400');
           return res.end(buffer);
         }
-      } else if (files.length > 1 && !hasHtml) {
-        // Kumpulan berkas (bukan zip website): tampilkan daftar semua berkas,
-        // masing-masing bisa dibuka sebagai kode atau didownload.
-        return res.send(renderFileListPage({ siteId: slug, files }));
       }
     }
-
     return res.status(404).send('Berkas tidak ditemukan.');
   } catch (error) {
     console.error(error);

@@ -7,6 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <!-- Ace Editor Library via CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.15.0/ace.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.15.0/ext-language_tools.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <style>
         :root {
             --pink: #FF2D78;
@@ -413,6 +414,7 @@
         .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;background:var(--bg);font-family:'Inter',sans-serif;}
         .login-card{background:#fff;border:var(--border-thick);border-radius:20px;padding:36px;width:100%;max-width:440px;box-shadow:var(--shadow);position:relative;}
         .login-header{text-align:center;margin-bottom:28px}.login-header h1{font-family:'Rubik',sans-serif;font-size:26px;font-weight:900;margin-bottom:8px}.title-badge{display:inline-block;background:var(--cyan);padding:2px 10px;border-radius:6px;border:2px solid var(--text-dark);box-shadow:2px 2px 0 var(--text-dark);font-size:20px}.login-header p{font-size:14px;color:#666;margin-top:8px;line-height:1.5}.login-wrap .form-group{margin-bottom:20px}.login-wrap label{display:block;font-size:12px;font-weight:700;margin-bottom:6px;text-transform:uppercase;font-family:'Rubik',sans-serif}.login-wrap input{width:100%;background:#FAFAFA;border:var(--border-thick);border-radius:12px;padding:13px 16px;font-size:14px;box-shadow:3px 3px 0 var(--text-dark)}.btn-login{width:100%;background:var(--pink);color:#fff;border:var(--border-thick);border-radius:12px;padding:14px;font-weight:800;font-size:15px;cursor:pointer;box-shadow:3px 3px 0 var(--text-dark)}.back-link{display:block;margin-top:22px;text-align:center;color:var(--text-dark);font-weight:700;text-decoration:none;font-size:13px}.login-error{background:#FFF0F0;border:2px solid #E53935;color:#B71C1C;border-radius:10px;padding:10px 12px;margin-bottom:18px;font-size:13px;font-weight:600;}
+        .riwayat-box{margin-bottom:22px}.riwayat-title{font-size:12px;font-weight:700;text-transform:uppercase;font-family:'Rubik',sans-serif;margin-bottom:10px;color:#666}.riwayat-item{display:flex;align-items:stretch;gap:8px;margin-bottom:8px}.riwayat-open{flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:2px;background:#FAFAFA;border:var(--border-thick);border-radius:12px;padding:10px 14px;cursor:pointer;box-shadow:3px 3px 0 var(--text-dark);text-align:left;font-family:'Inter',sans-serif}.riwayat-open:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--text-dark)}.riwayat-name{font-weight:800;font-size:14px;word-break:break-all}.riwayat-date{font-size:11px;color:#888}.riwayat-hapus{width:44px;flex-shrink:0;background:#fff;border:var(--border-thick);border-radius:12px;cursor:pointer;box-shadow:3px 3px 0 var(--text-dark);font-size:16px}.riwayat-hapus:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--text-dark)}.riwayat-divider{display:flex;align-items:center;gap:10px;margin:22px 0;font-size:11px;color:#999;text-transform:uppercase;font-weight:700;font-family:'Rubik',sans-serif}.riwayat-divider::before,.riwayat-divider::after{content:'';flex:1;height:2px;background:#eee}
 </style>
 </head>
 <body>
@@ -490,10 +492,39 @@
         const audioExt = new Set(['mp3','wav','ogg','m4a','flac','aac']);
         const videoExt = new Set(['mp4','webm','avi','mov','flv','mkv']);
 
+        // --- Riwayat website yang pernah dibuat/dibuka di perangkat ini ---
+        const RIWAYAT_KEY = 'hidzhost_riwayat';
+        const RIWAYAT_MAX = 20;
+
+        function getRiwayat() {
+            try {
+                const raw = JSON.parse(localStorage.getItem(RIWAYAT_KEY) || '[]');
+                return Array.isArray(raw) ? raw : [];
+            } catch (_) {
+                return [];
+            }
+        }
+
+        function saveRiwayat(list) {
+            try { localStorage.setItem(RIWAYAT_KEY, JSON.stringify(list.slice(0, RIWAYAT_MAX))); } catch (_) {}
+        }
+
+        function catatRiwayat(siteId, siteUrl) {
+            const list = getRiwayat().filter(item => item.siteId !== siteId);
+            list.unshift({ siteId, siteUrl, createdAt: new Date().toISOString() });
+            saveRiwayat(list);
+        }
+
+        function formatTanggal(iso) {
+            try { return new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }); }
+            catch (_) { return ''; }
+        }
+
         window.addEventListener('DOMContentLoaded', async () => {
             editor = ace.edit('codeEditorSection');
+            ace.require('ace/ext/language_tools');
             editor.setTheme('ace/theme/one_dark');
-            editor.setOptions({ fontSize: '13px', showPrintMargin: false, fontFamily: 'JetBrains Mono, monospace', enableBasicAutocompletion: true, useWorker: false });
+            editor.setOptions({ fontSize: '13px', showPrintMargin: false, fontFamily: 'JetBrains Mono, monospace', enableBasicAutocompletion: true, enableLiveAutocompletion: true, useWorker: false });
 
             document.getElementById('logoutBtn').addEventListener('click', async (event) => {
                 event.preventDefault();
@@ -530,6 +561,23 @@
         }
 
         function showLogin(prefill) {
+            const riwayat = getRiwayat();
+            const riwayatHtml = riwayat.length ? `
+                <div class="riwayat-box">
+                    <div class="riwayat-title">🕓 Riwayat Website di Perangkat Ini</div>
+                    ${riwayat.map(item => `
+                        <div class="riwayat-item">
+                            <button type="button" class="riwayat-open" onclick="bukaRiwayat('${item.siteId}')">
+                                <span class="riwayat-name">${esc(item.siteId)}</span>
+                                <span class="riwayat-date">${formatTanggal(item.createdAt)}</span>
+                            </button>
+                            <button type="button" class="riwayat-hapus" title="Hapus website ini" onclick="hapusRiwayat('${item.siteId}')">🗑</button>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="riwayat-divider">atau buka nama lain</div>
+            ` : '';
+
             document.body.innerHTML = `
                 <div class="login-wrap">
                     <div class="login-card">
@@ -538,27 +586,45 @@
                             <p>Masuk untuk mengelola berkas website Anda.</p>
                         </div>
                         <div id="loginError" class="login-error" style="display:none"></div>
+                        ${riwayatHtml}
                         <form id="loginForm">
-                            <div class="form-group"><label for="loginSite">Slug Website</label><input id="loginSite" value="${esc(prefill)}" placeholder="contoh: portfolio" required autocomplete="off"></div>
-                            <div class="form-group"><label for="loginPassword">Kata Sandi</label><input id="loginPassword" type="password" placeholder="Masukkan kata sandi" required></div>
-                            <button class="btn-login" type="submit">🔐 Masuk ke Pengelola</button>
+                            <div class="form-group"><label for="loginSite">Nama Website</label><input id="loginSite" value="${esc(prefill)}" placeholder="contoh: portfolio" required autocomplete="off"></div>
+                            <button class="btn-login" type="submit">🔓 Masuk ke Pengelola</button>
                         </form>
                         <a class="back-link" href="/">← Kembali ke HidzHost</a>
                     </div>
                 </div>`;
-            document.getElementById('loginForm').addEventListener('submit', async (event) => {
+            document.getElementById('loginForm').addEventListener('submit', (event) => {
                 event.preventDefault();
-                const errorBox = document.getElementById('loginError');
-                errorBox.style.display = 'none';
-                try {
-                    const res = await fetch('/manager/login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ site_id: document.getElementById('loginSite').value, password: document.getElementById('loginPassword').value }) });
-                    const data = await res.json();
-                    if (!res.ok || data.error) { errorBox.textContent = '⚠️ ' + (data.error || 'Login gagal.'); errorBox.style.display = 'block'; return; }
-                    currentSiteId = data.siteId;
-                    currentSiteUrl = `https://h.${currentSiteId}.hidzproject.my.id`;
-                    window.location.href = '/file-manager';
-                } catch (_) { errorBox.textContent = '⚠️ Tidak dapat terhubung ke server.'; errorBox.style.display = 'block'; }
+                login(document.getElementById('loginSite').value);
             });
+        }
+
+        async function login(siteId) {
+            const errorBox = document.getElementById('loginError');
+            errorBox.style.display = 'none';
+            try {
+                const res = await fetch('/manager/login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ site_id: siteId }) });
+                const data = await res.json();
+                if (!res.ok || data.error) { errorBox.textContent = '⚠️ ' + (data.error || 'Login gagal.'); errorBox.style.display = 'block'; return; }
+                catatRiwayat(data.siteId, `https://${data.siteId}.h.hidzproject.my.id`);
+                window.location.href = '/file-manager';
+            } catch (_) { errorBox.textContent = '⚠️ Tidak dapat terhubung ke server.'; errorBox.style.display = 'block'; }
+        }
+
+        function bukaRiwayat(siteId) {
+            login(siteId);
+        }
+
+        async function hapusRiwayat(siteId) {
+            const yakin = confirm(`Hapus "${siteId}" beserta seluruh berkasnya secara permanen? Website ini tidak akan bisa diakses lagi setelah dihapus.`);
+            if (!yakin) return;
+            try {
+                const loginRes = await fetch('/manager/login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ site_id: siteId }) });
+                if (loginRes.ok) await fetch('/manager/api/delete-site', { method: 'POST' });
+            } catch (_) {}
+            saveRiwayat(getRiwayat().filter(item => item.siteId !== siteId));
+            showLogin('');
         }
 
         async function loadManager() {
