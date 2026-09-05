@@ -1,10 +1,16 @@
 const path = require('path');
 const crypto = require('crypto');
+const fs = require('fs');
+const os = require('os');
+const zlib = require('zlib');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
 const express = require('express');
 const multer = require('multer');
 const AdmZip = require('adm-zip');
 const cookieSession = require('cookie-session');
 const { put, list, del } = require('@vercel/blob');
+const execFileAsync = promisify(execFile);
 const mammoth = require('mammoth');
 const XLSX = require('xlsx');
 require('dotenv').config();
@@ -203,9 +209,21 @@ function getMime(filePath) {
     '.gif': 'image/gif', '.webp': 'image/webp', '.ico': 'image/x-icon', '.pdf': 'application/pdf',
     '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.mp4': 'video/mp4',
     '.webm': 'video/webm', '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf',
-    '.zip': 'application/zip', '.csv': 'text/csv; charset=utf-8', '.md': 'text/markdown; charset=utf-8'
+    '.zip': 'application/zip', '.tar': 'application/x-tar', '.gz': 'application/gzip', '.tgz': 'application/gzip', '.bz2': 'application/x-bzip2', '.xz': 'application/x-xz', '.zst': 'application/zstd', '.7z': 'application/x-7z-compressed', '.rar': 'application/vnd.rar', '.csv': 'text/csv; charset=utf-8', '.md': 'text/markdown; charset=utf-8'
   };
   return map[ext] || 'application/octet-stream';
+}
+
+const ARCHIVE_EXTS = new Set(['zip', 'tar', 'gz', 'tgz', 'bz2', 'xz', 'zst', '7z', 'rar']);
+
+function archiveType(filePath) {
+  const lower = String(filePath || '').toLowerCase();
+  if (lower.endsWith('.tar.gz') || lower.endsWith('.tgz')) return 'tar.gz';
+  if (lower.endsWith('.tar.bz2')) return 'tar.bz2';
+  if (lower.endsWith('.tar.xz')) return 'tar.xz';
+  if (lower.endsWith('.tar.zst')) return 'tar.zst';
+  const ext = path.extname(lower).slice(1);
+  return ARCHIVE_EXTS.has(ext) ? ext : null;
 }
 
 function fileType(filePath) {
@@ -363,32 +381,150 @@ async function deleteSitePath(slug, relative) {
   return exact.length > 0;
 }
 
-async function extractZipBuffer(buffer, slug) {
-  const zip = new AdmZip(buffer);
-  const entries = zip.getEntries().filter(entry => {
-    const name = String(entry.entryName || '').replace(/\\/g, '/');
-    return name && !name.startsWith('__MACOSX/') && !name.includes('.DS_Store') && !name.split('/').includes('..');
-  });
-  let prefix = '';
-  const firstFile = entries.find(entry => !entry.isDirectory);
-  if (firstFile) {
-    const parts = firstFile.entryName.replace(/\\/g, '/').split('/');
-    if (parts.length > 1) {
-      const candidate = `${parts[0]}/`;
-      if (entries.every(entry => entry.entryName.replace(/\\/g, '/').startsWith(candidate))) prefix = candidate;
-    }
-  }
+function normalizeArchiveEntryPath(entryPath) {
+  const raw = String(entryPath || '').replace(/\\/g, '/').replace(/^\/+/, '');
+  if (!raw || raw.includes('\0')) return null;
+  const parts = raw.split('/').filter(Boolean);
+  if (!parts.length || parts.some(part => part === '.' || part === '..')) return null;
+  return parts.join('/');
+}
+
+function commonArchivePrefix(paths) {
+  const files = paths.filter(Boolean);
+  if (!files.length) return '';
+  const firstParts = files[0].split('/');
+  if (firstParts.length < 2) return '';
+  const candidate = firstParts[0];
+  return files.every(item => item === candidate || item.startsWith(`${candidate}/`)) ? `${candidate}/` : '';
+}
+
+async function writeExtractedFiles(slug, entries, overwrite = false) {
+  const normalized = entries
+    .map(entry => ({ ...entry, name: normalizeArchiveEntryPath(entry.name) }))
+    .filter(entry => entry.name);
+  const prefix = commonArchivePrefix(normalized.map(entry => entry.name));
+  const files = prefix
+    ? normalized.map(entry => ({ ...entry, name: entry.name.startsWith(prefix) ? entry.name.slice(prefix.length) : entry.name }))
+    : normalized;
+
   let count = 0;
-  for (const entry of entries) {
-    if (entry.isDirectory) continue;
-    let relative = entry.entryName.replace(/\\/g, '/');
-    if (prefix && relative.startsWith(prefix)) relative = relative.slice(prefix.length);
-    const clean = safeRelativePath(relative);
+  for (const entry of files) {
+    if (!entry.name || entry.isDirectory) continue;
+    const clean = safeRelativePath(entry.name);
     if (!clean) continue;
-    await putSiteFile(slug, clean, entry.getData());
+    const target = blobKey(slug, clean);
+    const existing = await findBlob(target);
+    if (existing && !overwrite) {
+      throw new Error(`Berkas "${clean}" sudah ada. Pilih timpa jika ingin menggantinya.`);
+    }
+    await putSiteFile(slug, clean, entry.data);
     count++;
   }
   return count;
+}
+
+async function extractZipBuffer(buffer, slug, overwrite = false) {
+  const zip = new AdmZip(buffer);
+  const entries = zip.getEntries()
+    .map(entry => ({
+      name: String(entry.entryName || '').replace(/\\/g, '/'),
+      isDirectory: entry.isDirectory,
+      data: entry.isDirectory ? null : entry.getData()
+    }))
+    .filter(entry => entry.name && !entry.name.startsWith('__MACOSX/') && !entry.name.split('/').includes('.DS_Store'));
+  return writeExtractedFiles(slug, entries, overwrite);
+}
+
+async function commandExists(command) {
+  try {
+    await execFileAsync('sh', ['-lc', `command -v ${command}`], { timeout: 3000 });
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function extractTarFile(archivePath, slug, overwrite) {
+  const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'hidzhost-tar-'));
+  try {
+    await execFileAsync('tar', ['-xf', archivePath, '-C', tempDir, '--no-same-owner', '--no-same-permissions'], { timeout: 120000, maxBuffer: 1024 * 1024 });
+    const entries = [];
+    async function walk(current, relative = '') {
+      const names = await fs.promises.readdir(current, { withFileTypes: true });
+      for (const dirent of names) {
+        const rel = relative ? `${relative}/${dirent.name}` : dirent.name;
+        const full = path.join(current, dirent.name);
+        if (dirent.isDirectory()) {
+          await walk(full, rel);
+        } else if (dirent.isFile()) {
+          entries.push({ name: rel, isDirectory: false, data: await fs.promises.readFile(full) });
+        }
+      }
+    }
+    await walk(tempDir);
+    return writeExtractedFiles(slug, entries, overwrite);
+  } finally {
+    await fs.promises.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+async function extractGzipBuffer(buffer, originalName, slug, overwrite) {
+  const outputName = originalName.replace(/\.gz$/i, '').replace(/\.tgz$/i, '');
+  const data = zlib.gunzipSync(buffer);
+  const clean = safeRelativePath(outputName) || safeRelativePath(path.basename(outputName));
+  if (!clean) throw new Error('Nama hasil ekstraksi tidak valid.');
+  const existing = await findBlob(blobKey(slug, clean));
+  if (existing && !overwrite) throw new Error(`Berkas "${clean}" sudah ada. Pilih timpa jika ingin menggantinya.`);
+  await putSiteFile(slug, clean, data);
+  return 1;
+}
+
+async function extractWithSevenZip(archivePath, slug, overwrite) {
+  const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'hidzhost-7z-'));
+  try {
+    let binary = null;
+    for (const candidate of ['7z', '7zz', 'unrar']) {
+      if (await commandExists(candidate)) { binary = candidate; break; }
+    }
+    if (!binary) throw new Error('Extractor 7-Zip/UnRAR tidak tersedia di runtime server.');
+    const args = binary === 'unrar' ? ['x', '-o+', archivePath, tempDir] : ['x', '-y', archivePath, `-o${tempDir}`];
+    await execFileAsync(binary, args, { timeout: 120000, maxBuffer: 1024 * 1024 });
+    const entries = [];
+    async function walk(current, relative = '') {
+      const names = await fs.promises.readdir(current, { withFileTypes: true });
+      for (const dirent of names) {
+        const rel = relative ? `${relative}/${dirent.name}` : dirent.name;
+        const full = path.join(current, dirent.name);
+        if (dirent.isDirectory()) await walk(full, rel);
+        else if (dirent.isFile()) entries.push({ name: rel, isDirectory: false, data: await fs.promises.readFile(full) });
+      }
+    }
+    await walk(tempDir);
+    return writeExtractedFiles(slug, entries, overwrite);
+  } finally {
+    await fs.promises.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+async function extractArchiveBuffer(buffer, originalName, slug, overwrite = false) {
+  const type = archiveType(originalName);
+  if (!type) throw new Error('Format arsip tidak didukung.');
+  if (type === 'zip') return extractZipBuffer(buffer, slug, overwrite);
+
+  const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'hidzhost-archive-'));
+  const archivePath = path.join(tempDir, path.basename(originalName));
+  try {
+    await fs.promises.writeFile(archivePath, buffer);
+    if (type === 'gz') return extractGzipBuffer(buffer, path.basename(originalName), slug, overwrite);
+    if (type === 'tar' || type === 'tar.gz' || type === 'tar.bz2' || type === 'tar.xz' || type === 'tar.zst' || type === 'tgz') {
+      return extractTarFile(archivePath, slug, overwrite);
+    }
+    if (type === '7z' || type === 'rar') return extractWithSevenZip(archivePath, slug, overwrite);
+    if (type === 'bz2' || type === 'xz' || type === 'zst') throw new Error(`File .${type} tunggal bukan arsip tar dan belum memiliki handler ekstraksi langsung.`);
+    throw new Error('Format arsip tidak didukung.');
+  } finally {
+    await fs.promises.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
 function escapeHtml(str) {
@@ -657,6 +793,40 @@ app.post('/api/zip-deploy', upload.single('zipfile'), async (req, res) => {
   } catch (error) {
     console.error(error);
     return sendJson(res, 400, { error: 'Berkas ZIP tidak dapat diproses.' });
+  }
+});
+
+app.post('/manager/api/extract-archive', requireManagerAuth, async (req, res) => {
+  const relative = safeRelativePath(req.body?.file);
+  const overwrite = req.body?.overwrite === '1';
+  if (!relative) return sendJson(res, 400, { error: 'Nama arsip tidak valid.' });
+  const type = archiveType(relative);
+  if (!type) return sendJson(res, 400, { error: 'Berkas bukan arsip yang didukung.' });
+  try {
+    const blob = await findBlob(blobKey(req.siteId, relative));
+    if (!blob || blob.pathname !== blobKey(req.siteId, relative)) return sendJson(res, 404, { error: 'Arsip tidak ditemukan.' });
+    const buffer = await readBlobBuffer(blob);
+    const count = await extractArchiveBuffer(buffer, relative, req.siteId, overwrite);
+    return res.json({ success: true, files_extracted: count });
+  } catch (error) {
+    console.error(error);
+    return sendJson(res, 400, { error: error.message || 'Arsip tidak dapat diekstrak.' });
+  }
+});
+
+app.post('/api/archive-deploy', upload.single('archive'), async (req, res) => {
+  try {
+    const slug = normalizeSlug(req.body.siteId);
+    if (!slug || !validateSlug(slug)) return sendJson(res, 400, { error: 'Nama website tidak valid.' });
+    if (!req.file) return sendJson(res, 400, { error: 'Berkas arsip tidak ditemukan.' });
+    if (!archiveType(req.file.originalname)) return sendJson(res, 400, { error: 'Format arsip tidak didukung.' });
+    const result = await ensureSite(slug);
+    if (!result.ok) return sendJson(res, 409, { error: result.error });
+    const count = await extractArchiveBuffer(req.file.buffer, req.file.originalname, slug);
+    return res.json({ success: true, siteId: slug, files_extracted: count, url: siteUrl(slug), managerUrl: managerUrl(slug) });
+  } catch (error) {
+    console.error(error);
+    return sendJson(res, 400, { error: error.message || 'Berkas arsip tidak dapat diproses.' });
   }
 });
 

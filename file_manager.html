@@ -752,7 +752,10 @@
                     document.getElementById('binaryPreviewContent').innerHTML=`<video controls style="max-width:100%;max-height:360px;margin-bottom:16px" src="${downloadUrl}"></video><div class="binary-info"><h3>${esc(data.filename)}</h3><p>Ukuran: <strong>${formatSize(data.size)}</strong></p><a href="${downloadUrl}" target="_blank" class="btn-download">⬇️ Unduh Video</a></div>`;
                 } else if (data.file_type === 'binary') {
                     showPanel('binary'); document.getElementById('binaryFilename').innerText=filePath; document.getElementById('downloadBinaryBtn').href=downloadUrl;
-                    document.getElementById('binaryPreviewContent').innerHTML=`<div style="font-size:64px;margin-bottom:16px">📦</div><div class="binary-info"><h3>${esc(data.filename)}</h3><p>Ukuran: <strong>${formatSize(data.size)}</strong> &nbsp;|&nbsp; Tipe: <strong>.${esc(data.ext || 'unknown')}</strong></p><p>Berkas biner tidak dapat dibuka di editor teks.</p><a href="${downloadUrl}" target="_blank" class="btn-download">⬇️ Unduh Berkas</a></div>`;
+                    const archiveExts = ['zip','tar','gz','tgz','bz2','xz','zst','7z','rar'];
+                    const isArchive = archiveExts.includes((data.ext || '').toLowerCase()) || /\.(tar\.(gz|bz2|xz|zst))$/i.test(filePath);
+                    const extractButton = isArchive ? `<button type="button" class="btn-download" style="border:2px solid #1a1a2e;cursor:pointer;background:#f4d03f;margin-left:8px" onclick="extractArchive('${encodeURIComponent(filePath)}')">📂 Ekstrak Di Sini</button>` : '';
+                    document.getElementById('binaryPreviewContent').innerHTML=`<div style="font-size:64px;margin-bottom:16px">📦</div><div class="binary-info"><h3>${esc(data.filename)}</h3><p>Ukuran: <strong>${formatSize(data.size)}</strong> &nbsp;|&nbsp; Tipe: <strong>.${esc(data.ext || 'unknown')}</strong></p><p>${isArchive ? 'Arsip siap diunduh atau diekstrak ke website ini.' : 'Berkas biner tidak dapat dibuka di editor teks.'}</p><a href="${downloadUrl}" target="_blank" class="btn-download">⬇️ Unduh Berkas</a>${extractButton}</div>`;
                 } else {
                     showPanel('editor');
                     const ext = filePath.split('.').pop().toLowerCase();
@@ -760,6 +763,35 @@
                     editor.session.setMode(modes[ext] || 'ace/mode/text'); editor.setValue(data.content, -1);
                 }
             } catch (_) { await appAlert('Tidak dapat memuat berkas. Silakan coba lagi.'); }
+        }
+
+        async function extractArchive(encodedPath) {
+            const filePath = decodeURIComponent(encodedPath);
+            let overwrite = false;
+            while (true) {
+                try {
+                    const res = await fetch('/manager/api/extract-archive', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({file: filePath, overwrite: overwrite ? '1' : '0'})
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        await appAlert(`Arsip berhasil diekstrak. ${data.files_extracted} berkas diproses.`);
+                        await loadTree();
+                        return;
+                    }
+                    if (!overwrite && /sudah ada/.test(data.error || '')) {
+                        const yakin = await appConfirm(`${data.error}\n\nTimpa berkas yang sudah ada?`);
+                        if (yakin) { overwrite = true; continue; }
+                    }
+                    await appAlert('Gagal mengekstrak: ' + (data.error || 'Kesalahan tidak diketahui.'));
+                    return;
+                } catch (_) {
+                    await appAlert('Tidak dapat terhubung ke server.');
+                    return;
+                }
+            }
         }
 
         async function saveCurrentFile() {
